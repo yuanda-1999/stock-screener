@@ -77,16 +77,17 @@ export async function loadAllToMemory() {
         return [];
       }
     };
+    // 不加 orderBy：大表排序会导致 PostgreSQL 语句超时。用 limit 控制数量即可。
     const [stocks, divid, monthly, weekly, daily, macd, cyq, dailyBasic, finance] = await Promise.all([
       safe("stock_basic_cache", () => loadAllFromSupabase("stock_basic_cache")),
       safe("dividend_cache", () => loadAllFromSupabase("dividend_cache")),
-      safe("monthly_bar_cache", () => loadAllFromSupabase("monthly_bar_cache", "*", { orderBy: "trade_date", limit: 200_000 })),
-      safe("weekly_bar_cache", () => loadAllFromSupabase("weekly_bar_cache", "*", { orderBy: "trade_date", limit: 300_000 })),
-      safe("daily_bar_cache", () => loadAllFromSupabase("daily_bar_cache", "*", { orderBy: "trade_date", limit: DAYS_90 })),
-      safe("macd_factor_cache", () => loadAllFromSupabase("macd_factor_cache", "*", { orderBy: "trade_date", limit: DAYS_90 })),
-      safe("cyq_perf_cache", () => loadAllFromSupabase("cyq_perf_cache", "*", { orderBy: "trade_date", limit: 100_000 })),
-      safe("daily_basic_cache", () => loadAllFromSupabase("daily_basic_cache", "*", { orderBy: "trade_date", limit: 100_000 })),
-      safe("finance_cache", () => loadAllFromSupabase("finance_cache", "*", { orderBy: "end_date", limit: 100_000 })),
+      safe("monthly_bar_cache", () => loadAllFromSupabase("monthly_bar_cache", "*", { limit: 200_000 })),
+      safe("weekly_bar_cache", () => loadAllFromSupabase("weekly_bar_cache", "*", { limit: 300_000 })),
+      safe("daily_bar_cache", () => loadAllFromSupabase("daily_bar_cache", "*", { limit: DAYS_90 })),
+      safe("macd_factor_cache", () => loadAllFromSupabase("macd_factor_cache", "*", { limit: DAYS_90 })),
+      safe("cyq_perf_cache", () => loadAllFromSupabase("cyq_perf_cache", "*", { limit: 100_000 })),
+      safe("daily_basic_cache", () => loadAllFromSupabase("daily_basic_cache", "*", { limit: 100_000 })),
+      safe("finance_cache", () => loadAllFromSupabase("finance_cache", "*", { limit: 100_000 })),
     ]);
 
     if (!stocks.length) throw new Error("stock_basic_cache is empty — check Supabase connection");
