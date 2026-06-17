@@ -98,7 +98,7 @@ function buildFilters(state: Record<string, unknown>): CombinedScreeningFilters 
 // ==================== 主页面 ====================
 
 export default function Home() {
-  const { results, isScanning, progress, error, start, stop } = useScreening();
+  const { results, isScanning, progress, loadingMessage, error, start, stop } = useScreening();
 
   // 筛选条件状态：{ [indicatorId]: { ...values } }，key 存在 = 已启用
   const [filterState, setFilterState] = useState<Record<string, Record<string, unknown>>>({});
@@ -213,19 +213,25 @@ export default function Home() {
           )}
         </div>
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          {isScanning && progress && (
+          {isScanning && (loadingMessage || progress) && (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
-                {progress.done}/{progress.total}
-              </span>
-              <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all duration-300"
-                  style={{
-                    width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`,
-                  }}
-                />
-              </div>
+              {loadingMessage ? (
+                <span className="text-xs text-muted-foreground whitespace-nowrap">{loadingMessage}</span>
+              ) : progress ? (
+                <>
+                  <span className="text-xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+                    {progress.done}/{progress.total}
+                  </span>
+                  <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-300"
+                      style={{
+                        width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                </>
+              ) : null}
             </div>
           )}
           <Button
@@ -348,7 +354,9 @@ export default function Home() {
           {/* 状态栏 */}
           <div className="shrink-0 px-6 py-2 border-b border-border flex items-center justify-between text-sm">
             <div className="flex items-center gap-4">
-              {isScanning && progress ? (
+              {isScanning && loadingMessage ? (
+                <span className="text-muted-foreground">{loadingMessage}</span>
+              ) : isScanning && progress ? (
                 <span className="text-muted-foreground">
                   扫描中 {progress.done}/{progress.total}
                 </span>
@@ -361,7 +369,7 @@ export default function Home() {
                       : "就绪"}
                 </span>
               )}
-              {isScanning && progress && (
+              {isScanning && progress && progress.total > 1 && (
                 <div className="w-32 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary rounded-full transition-all duration-300"

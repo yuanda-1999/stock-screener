@@ -7,6 +7,7 @@ interface UseScreeningReturn {
   results: StockScreeningResult[];
   isScanning: boolean;
   progress: { done: number; total: number } | null;
+  loadingMessage: string | null;
   error: string | null;
   start: (filters: CombinedScreeningFilters, limitCodes?: string[]) => void;
   stop: () => void;
@@ -16,6 +17,7 @@ export function useScreening(): UseScreeningReturn {
   const [results, setResults] = useState<StockScreeningResult[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -35,6 +37,7 @@ export function useScreening(): UseScreeningReturn {
       setResults([]);
       setError(null);
       setProgress(null);
+      setLoadingMessage(null);
       setIsScanning(true);
 
       // 构建 URL 参数
@@ -68,7 +71,9 @@ export function useScreening(): UseScreeningReturn {
                 if (!line.startsWith("data: ")) continue;
                 try {
                   const event = JSON.parse(line.slice(6));
-                  if (event.type === "result") {
+                  if (event.type === "loading") {
+                    setLoadingMessage(event.message || "正在加载数据...");
+                  } else if (event.type === "result") {
                     setResults((prev) => [...prev, event.stock]);
                   } else if (event.type === "progress") {
                     setProgress({ done: event.done, total: event.total });
@@ -101,7 +106,7 @@ export function useScreening(): UseScreeningReturn {
     []
   );
 
-  return { results, isScanning, progress, error, start, stop };
+  return { results, isScanning, progress, loadingMessage, error, start, stop };
 }
 
 function buildParams(params: URLSearchParams, filters: CombinedScreeningFilters) {

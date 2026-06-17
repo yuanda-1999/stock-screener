@@ -7,20 +7,6 @@ import type { CombinedScreeningFilters } from "@/lib/types";
 let _loaded = false;
 
 export async function GET(req: NextRequest) {
-  // 懒加载：首次请求时将数据加载到内存
-  if (!_loaded) {
-    try {
-      await loadAllToMemory();
-      _loaded = true;
-    } catch (e) {
-      console.error("[screening] loadAllToMemory failed:", e);
-      return new Response(
-        JSON.stringify({ error: `数据加载失败: ${(e as Error).message}` }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-  }
-
   const url = req.nextUrl;
   const params = url.searchParams;
 
@@ -116,19 +102,25 @@ export async function GET(req: NextRequest) {
   const codesParam = params.get("codes");
   const limitCodes = codesParam ? codesParam.split(",") : undefined;
 
-  // SSE 流
+  // SSE 流 — 加载和筛选都在流内完成，前端能立即收到 loading 事件
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      const send = (event: object) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      };
       try {
+        if (!_loaded) {
+          send({ type: "loading", message: "正在加载数据..." });
+          await loadAllToMemory();
+          _loaded = true;
+        }
         for await (const event of tushareCombinedScreening(filters, limitCodes)) {
-          const line = `data: ${JSON.stringify(event)}\n\n`;
-          controller.enqueue(encoder.encode(line));
+          send(event);
           if (event.type === "done") break;
         }
       } catch (e) {
-        const errEvent = JSON.stringify({ type: "error", error: (e as Error).message || String(e) });
-        controller.enqueue(encoder.encode(`data: ${errEvent}\n\n`));
+        send({ type: "error", error: (e as Error).message || String(e) });
       } finally {
         controller.close();
       }

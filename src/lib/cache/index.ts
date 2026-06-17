@@ -66,7 +66,7 @@ export async function loadAllToMemory() {
   if (USE_SUPABASE) {
     const { loadAllFromSupabase } = await import("./supabase");
 
-    // 大表加 orderBy + limit 只加载近期数据，避免 Vercel 超时/OOM
+    // 大表加 orderBy + limit 只加载近期数据。依赖 Supabase 数据库索引（trade_date / end_date）。
     // 每表独立 catch，单表失败不影响其他表
     const DAYS_90 = 500_000;  // 5000只 × ~100 条/只，够所有技术指标用
     const safe = async <T>(table: string, fn: () => Promise<T[]>): Promise<T[]> => {
@@ -77,8 +77,6 @@ export async function loadAllToMemory() {
         return [];
       }
     };
-    // 大表加 orderBy + limit 只加载近期数据。依赖 Supabase 数据库索引（trade_date / end_date）。
-    const DAYS_90 = 500_000;
     const [stocks, divid, monthly, weekly, daily, macd, cyq, dailyBasic, finance] = await Promise.all([
       safe("stock_basic_cache", () => loadAllFromSupabase("stock_basic_cache")),
       safe("dividend_cache", () => loadAllFromSupabase("dividend_cache")),
