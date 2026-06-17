@@ -676,7 +676,7 @@ function ChipInputs({
         onChange={(e) => onChange("weeks", parseInt(e.target.value) || 30)}
         className="h-7 text-xs w-16"
       />
-      <span className="text-xs text-muted-foreground">{unit || "%"}≤</span>
+      <span className="text-xs text-muted-foreground">{unit || "%"}≥</span>
       <Input
         type="number"
         step="0.1"

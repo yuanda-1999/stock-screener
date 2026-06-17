@@ -399,7 +399,7 @@ async function checkChip(
   const avgCost = (latest.cost_95pct + latest.cost_5pct) / 2;
   if (avgCost <= 0) return null;
   const concentration = ((latest.cost_95pct - latest.cost_5pct) / avgCost) * 100;
-  if (concentration > filter.thresholdPct) return null;
+  if (concentration < filter.thresholdPct) return null;
   return concentration;
 }
 
