@@ -1,0 +1,6 @@
+# data files — generated locally
+data/
+
+# dev
+node_modules/
+.git/
