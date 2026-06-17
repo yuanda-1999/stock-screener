@@ -7,10 +7,18 @@ import type { CombinedScreeningFilters } from "@/lib/types";
 let _loaded = false;
 
 export async function GET(req: NextRequest) {
-  // 懒加载：首次请求时将 SQLite 数据加载到内存
+  // 懒加载：首次请求时将数据加载到内存
   if (!_loaded) {
-    await loadAllToMemory();
-    _loaded = true;
+    try {
+      await loadAllToMemory();
+      _loaded = true;
+    } catch (e) {
+      console.error("[screening] loadAllToMemory failed:", e);
+      return new Response(
+        JSON.stringify({ error: `数据加载失败: ${(e as Error).message}` }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
   }
 
   const url = req.nextUrl;
@@ -119,7 +127,8 @@ export async function GET(req: NextRequest) {
           if (event.type === "done") break;
         }
       } catch (e) {
-        controller.enqueue(encoder.encode(`data: {"type":"error","error":"${String(e)}"}\n\n`));
+        const errEvent = JSON.stringify({ type: "error", error: (e as Error).message || String(e) });
+        controller.enqueue(encoder.encode(`data: ${errEvent}\n\n`));
       } finally {
         controller.close();
       }

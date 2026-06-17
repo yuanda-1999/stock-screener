@@ -24,7 +24,7 @@ import type {
   SSEEvent,
 } from "../types";
 
-const SLEEP_MS = 80;
+const SLEEP_MS = process.env.SUPABASE_URL ? 5 : 80;  // Vercel 上几乎不 sleep，本地保持限流
 const FLUSH_EVERY = 100;
 const PROGRESS_EVERY = 50;
 
@@ -717,7 +717,7 @@ export async function* tushareCombinedScreening(
       yield { type: "progress", done, total };
     }
 
-    if (flushed >= FLUSH_EVERY) {
+    if (flushed >= FLUSH_EVERY && !process.env.SUPABASE_URL) {
       await flushWrites();
       flushed = 0;
     }
@@ -728,7 +728,7 @@ export async function* tushareCombinedScreening(
     }
   }
 
-  await flushWrites();
+  if (!process.env.SUPABASE_URL) await flushWrites();
   yield { type: "progress", done: total, total };
   yield { type: "done" };
 }

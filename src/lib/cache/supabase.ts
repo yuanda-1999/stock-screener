@@ -10,21 +10,30 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-export async function loadAllFromSupabase(table: string, columns = "*") {
+interface LoadOptions {
+  limit?: number;
+  orderBy?: string;
+  ascending?: boolean;
+}
+
+export async function loadAllFromSupabase(table: string, columns = "*", options?: LoadOptions) {
   const sb = getSupabase();
   const all: Record<string, unknown>[] = [];
   const PAGE = 1000;
-  let from = 0;
-  for (let i = 0; i < 2000; i++) {
-    const { data, error } = await sb
-      .from(table)
-      .select(columns)
-      .range(from, from + PAGE - 1);
+  const maxPages = options?.limit ? Math.ceil(options.limit / PAGE) : 2000;
+
+  for (let page = 0; page < maxPages; page++) {
+    let query = sb.from(table).select(columns);
+    if (options?.orderBy) {
+      query = query.order(options.orderBy, { ascending: options.ascending ?? false });
+    }
+    query = query.range(page * PAGE, page * PAGE + PAGE - 1);
+
+    const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
     all.push(...(data as unknown as Record<string, unknown>[]));
     if (data.length < PAGE) break;
-    from += PAGE;
   }
   return all;
 }

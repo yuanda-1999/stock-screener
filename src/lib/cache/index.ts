@@ -66,16 +66,18 @@ export async function loadAllToMemory() {
   if (USE_SUPABASE) {
     const { loadAllFromSupabase } = await import("./supabase");
 
+    // 大表加 orderBy + limit 只加载近期数据，避免 Vercel 超时/OOM
+    const DAYS_90 = 500_000;  // 5000只 × ~100 条/只，够所有技术指标用
     const [stocks, divid, monthly, weekly, daily, macd, cyq, dailyBasic, finance] = await Promise.all([
       loadAllFromSupabase("stock_basic_cache"),
       loadAllFromSupabase("dividend_cache"),
-      loadAllFromSupabase("monthly_bar_cache"),
-      loadAllFromSupabase("weekly_bar_cache"),
-      loadAllFromSupabase("daily_bar_cache"),
-      loadAllFromSupabase("macd_factor_cache"),
-      loadAllFromSupabase("cyq_perf_cache"),
-      loadAllFromSupabase("daily_basic_cache").catch(() => []),
-      loadAllFromSupabase("finance_cache").catch(() => []),
+      loadAllFromSupabase("monthly_bar_cache", "*", { orderBy: "trade_date", limit: 200_000 }),
+      loadAllFromSupabase("weekly_bar_cache", "*", { orderBy: "trade_date", limit: 300_000 }),
+      loadAllFromSupabase("daily_bar_cache", "*", { orderBy: "trade_date", limit: DAYS_90 }),
+      loadAllFromSupabase("macd_factor_cache", "*", { orderBy: "trade_date", limit: DAYS_90 }),
+      loadAllFromSupabase("cyq_perf_cache", "*", { orderBy: "trade_date", limit: 100_000 }),
+      loadAllFromSupabase("daily_basic_cache", "*", { orderBy: "trade_date", limit: 100_000 }).catch(() => []),
+      loadAllFromSupabase("finance_cache", "*", { orderBy: "end_date", limit: 100_000 }).catch(() => []),
     ]);
 
     loadStockNames(new Map(stocks.map((s: Record<string, unknown>) => [s.code as string, s.name as string])));

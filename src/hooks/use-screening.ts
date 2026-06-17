@@ -55,32 +55,40 @@ export function useScreening(): UseScreeningReturn {
           const decoder = new TextDecoder();
           let buffer = "";
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n\n");
-            buffer = lines.pop() || "";
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n\n");
+              buffer = lines.pop() || "";
 
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-              try {
-                const event = JSON.parse(line.slice(6));
-                if (event.type === "result") {
-                  setResults((prev) => [...prev, event.stock]);
-                } else if (event.type === "progress") {
-                  setProgress({ done: event.done, total: event.total });
-                } else if (event.type === "done") {
-                  setIsScanning(false);
-                } else if (event.type === "error") {
-                  setError(event.error);
-                  setIsScanning(false);
+              for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                try {
+                  const event = JSON.parse(line.slice(6));
+                  if (event.type === "result") {
+                    setResults((prev) => [...prev, event.stock]);
+                  } else if (event.type === "progress") {
+                    setProgress({ done: event.done, total: event.total });
+                  } else if (event.type === "done") {
+                    setIsScanning(false);
+                    return;
+                  } else if (event.type === "error") {
+                    setError(event.error);
+                    setIsScanning(false);
+                    return;
+                  }
+                } catch {
+                  // 解析失败，跳过
                 }
-              } catch {
-                // 解析失败，跳过
               }
             }
+            // 流意外结束（未收到 done/error 事件）
+            setError("连接意外中断，请重试");
+          } finally {
+            setIsScanning(false);
           }
         })
         .catch((err) => {

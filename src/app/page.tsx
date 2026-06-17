@@ -212,7 +212,22 @@ export default function Home() {
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          {isScanning && progress && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+                {progress.done}/{progress.total}
+              </span>
+              <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-300"
+                  style={{
+                    width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
           <Button
             variant="ghost"
             size="sm"
