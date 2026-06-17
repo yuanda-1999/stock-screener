@@ -60,15 +60,18 @@ export async function flushWrites() {
   writeBuffer.clear();
 }
 
-// === 启动时全量加载 ===
+// === 按需加载 ===
 
-export async function loadAllToMemory() {
+export interface LoadOptions {
+  needsBars?: boolean;       // 是否需要日线/周线/月线（技术指标用）
+  needsTechFactors?: boolean; // 是否需要 MACD/CYQ（MACD/筹码用）
+  needsDividends?: boolean;   // 是否需要分红数据
+}
+
+export async function loadAllToMemory(options: LoadOptions = {}) {
   if (USE_SUPABASE) {
     const { loadAllFromSupabase } = await import("./supabase");
 
-    // 大表加 orderBy + limit 只加载近期数据。依赖 Supabase 数据库索引（trade_date / end_date）。
-    // 每表独立 catch，单表失败不影响其他表
-    const DAYS_90 = 500_000;  // 5000只 × ~100 条/只，够所有技术指标用
     const safe = async <T>(table: string, fn: () => Promise<T[]>): Promise<T[]> => {
       try {
         return await fn();
@@ -77,31 +80,76 @@ export async function loadAllToMemory() {
         return [];
       }
     };
-    const [stocks, divid, monthly, weekly, daily, macd, cyq, dailyBasic, finance] = await Promise.all([
+
+    // 核心表（始终加载，数据量小）
+    const coreJobs: Promise<unknown[]>[] = [
       safe("stock_basic_cache", () => loadAllFromSupabase("stock_basic_cache")),
-      safe("dividend_cache", () => loadAllFromSupabase("dividend_cache")),
-      safe("monthly_bar_cache", () => loadAllFromSupabase("monthly_bar_cache", "*", { orderBy: "trade_date", limit: 200_000 })),
-      safe("weekly_bar_cache", () => loadAllFromSupabase("weekly_bar_cache", "*", { orderBy: "trade_date", limit: 300_000 })),
-      safe("daily_bar_cache", () => loadAllFromSupabase("daily_bar_cache", "*", { orderBy: "trade_date", limit: DAYS_90 })),
-      safe("macd_factor_cache", () => loadAllFromSupabase("macd_factor_cache", "*", { orderBy: "trade_date", limit: DAYS_90 })),
-      safe("cyq_perf_cache", () => loadAllFromSupabase("cyq_perf_cache", "*", { orderBy: "trade_date", limit: 100_000 })),
-      safe("daily_basic_cache", () => loadAllFromSupabase("daily_basic_cache", "*", { orderBy: "trade_date", limit: 100_000 })),
-      safe("finance_cache", () => loadAllFromSupabase("finance_cache", "*", { orderBy: "end_date", limit: 100_000 })),
-    ]);
+      safe("daily_basic_cache", () => loadAllFromSupabase("daily_basic_cache", "*", { orderBy: "trade_date", limit: 20_000 })),
+      safe("finance_cache", () => loadAllFromSupabase("finance_cache", "*", { orderBy: "end_date", limit: 20_000 })),
+    ];
+
+    // 条件加载
+    if (options.needsDividends) {
+      coreJobs.push(safe("dividend_cache", () => loadAllFromSupabase("dividend_cache")));
+    }
+
+    const coreResults = await Promise.all(coreJobs);
+    const [stocks, dailyBasic, finance, divid] = [
+      coreResults[0],
+      coreResults[1],
+      coreResults[2],
+      options.needsDividends ? coreResults[3] || [] : [],
+    ];
 
     if (!stocks.length) throw new Error("stock_basic_cache is empty — check Supabase connection");
-    loadStockNames(new Map(stocks.map((s: Record<string, unknown>) => [s.code as string, s.name as string])));
-    loadDividends(divid as unknown as DividendRecord[]);
-    loadMonthlyBars(monthly as unknown as MonthlyBar[]);
-    loadWeeklyBars(weekly as unknown as WeeklyBar[]);
-    loadDailyBarsMem(daily as unknown as DailyBar[]);
-    loadMACDFactors(macd as unknown as MACDFactor[]);
-    loadCyqPerf(cyq as unknown as CyqPerf[]);
+    loadStockNames(new Map((stocks as Record<string, unknown>[]).map((s) => [s.code as string, s.name as string])));
     if (dailyBasic.length) loadDailyBasics(dailyBasic as unknown as DailyBasic[]);
     if (finance.length) loadFinances(finance as unknown as FinanceIndicator[]);
+    if (options.needsDividends) loadDividends(divid as unknown as DividendRecord[]);
+
+    let daily: unknown[] = [];
+    let monthly: unknown[] = [];
+    let weekly: unknown[] = [];
+    let macd: unknown[] = [];
+    let cyq: unknown[] = [];
+
+    if (options.needsBars || options.needsTechFactors) {
+      const barJobs: Promise<unknown[]>[] = [];
+      if (options.needsBars) {
+        barJobs.push(
+          safe("daily_bar_cache", () => loadAllFromSupabase("daily_bar_cache", "*", { orderBy: "trade_date", limit: 80_000 })),
+          safe("monthly_bar_cache", () => loadAllFromSupabase("monthly_bar_cache", "*", { orderBy: "trade_date", limit: 10_000 })),
+          safe("weekly_bar_cache", () => loadAllFromSupabase("weekly_bar_cache", "*", { orderBy: "trade_date", limit: 20_000 })),
+        );
+      }
+      if (options.needsTechFactors) {
+        barJobs.push(
+          safe("macd_factor_cache", () => loadAllFromSupabase("macd_factor_cache", "*", { orderBy: "trade_date", limit: 80_000 })),
+          safe("cyq_perf_cache", () => loadAllFromSupabase("cyq_perf_cache", "*", { orderBy: "trade_date", limit: 10_000 })),
+        );
+      }
+      const barResults = await Promise.all(barJobs);
+      let idx = 0;
+      if (options.needsBars) {
+        daily = barResults[idx++] || [];
+        monthly = barResults[idx++] || [];
+        weekly = barResults[idx++] || [];
+      }
+      if (options.needsTechFactors) {
+        macd = barResults[idx++] || [];
+        cyq = barResults[idx++] || [];
+      }
+    }
+
+    if (daily.length) loadDailyBarsMem(daily as unknown as DailyBar[]);
+    if (monthly.length) loadMonthlyBars(monthly as unknown as MonthlyBar[]);
+    if (weekly.length) loadWeeklyBars(weekly as unknown as WeeklyBar[]);
+    if (macd.length) loadMACDFactors(macd as unknown as MACDFactor[]);
+    if (cyq.length) loadCyqPerf(cyq as unknown as CyqPerf[]);
+
     console.log(`[cache] Supabase: ${stocks.length} stocks, ${daily.length} daily, ${dailyBasic.length} basic, ${finance.length} fin`);
   } else {
-    // 本地 SQLite（异步加载）
+    // 本地 SQLite — 全量加载
     const [stocks, divid, monthly, weekly, daily, macd, cyq, dailyBasic, finance] = await Promise.all([
       loadAll<StockBasic>("stock_basic_cache"),
       loadAll<DividendRecord>("dividend_cache"),

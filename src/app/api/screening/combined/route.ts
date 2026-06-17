@@ -4,7 +4,21 @@ import { loadAllToMemory } from "@/lib/cache/index";
 import { tushareCombinedScreening } from "@/lib/tushare/screening";
 import type { CombinedScreeningFilters } from "@/lib/types";
 
-let _loaded = false;
+let _loadedBars = false;
+let _loadedTechFactors = false;
+let _loadedDividends = false;
+
+// 判断筛选条件是否需要日线数据
+function needsBars(filters: CombinedScreeningFilters): boolean {
+  return !!(filters.price || filters.changeRate || filters.amplitude ||
+    filters.kdj || filters.rsi || filters.boll || filters.wr || filters.bias || filters.gainers);
+}
+function needsTechFactors(filters: CombinedScreeningFilters): boolean {
+  return !!(filters.macd || filters.chip);
+}
+function needsDividends(filters: CombinedScreeningFilters): boolean {
+  return !!(filters.dividend || filters.dividendYield);
+}
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl;
@@ -102,7 +116,12 @@ export async function GET(req: NextRequest) {
   const codesParam = params.get("codes");
   const limitCodes = codesParam ? codesParam.split(",") : undefined;
 
-  // SSE 流 — 加载和筛选都在流内完成，前端能立即收到 loading 事件
+  // 按需加载
+  const wantBars = needsBars(filters);
+  const wantTechFactors = needsTechFactors(filters);
+  const wantDividends = needsDividends(filters);
+
+  // SSE 流
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -110,11 +129,15 @@ export async function GET(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       };
       try {
-        if (!_loaded) {
-          send({ type: "loading", message: "正在加载数据..." });
-          await loadAllToMemory();
-          _loaded = true;
-        }
+        send({ type: "loading", message: "正在加载数据..." });
+        await loadAllToMemory({
+          needsBars: wantBars && !_loadedBars,
+          needsTechFactors: wantTechFactors && !_loadedTechFactors,
+          needsDividends: wantDividends && !_loadedDividends,
+        });
+        if (wantBars) _loadedBars = true;
+        if (wantTechFactors) _loadedTechFactors = true;
+        if (wantDividends) _loadedDividends = true;
         for await (const event of tushareCombinedScreening(filters, limitCodes)) {
           send(event);
           if (event.type === "done") break;
