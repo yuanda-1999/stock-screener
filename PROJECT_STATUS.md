@@ -8,11 +8,12 @@
 
 ## 生产地址
 
-- **https://stock-screener-omega-brown.vercel.app**
+- https://xuangubao.top
+- Vercel: https://stock-screener-omega-brown.vercel.app
 - GitHub: https://github.com/yuanda-1999/stock-screener
 - Supabase: https://supabase.com/dashboard/project/cmaakeewurufvziqwagb
 
-## 已完成
+## 已完成 (7/7 Phase)
 
 - **Phase 1: 脚手架** — Next.js 16 + shadcn/ui + Tailwind CSS v4 亮色主题
 - **Phase 2: 数据层** — 内存 Map + JSON 双模式，env 驱动二选一
@@ -20,8 +21,7 @@
 - **Phase 4: 数据采集** — daily_basic 5208只 + finance 16587行 (2023-2025)
 - **Phase 5: API 路由** — /api/screening/combined + /api/screening/prewarm
 - **Phase 6: 前端页面** — 搜索栏 + 折叠筛选面板 + SSE 结果表格
-- **Phase 7: 部署配置** — Vercel + Supabase schema + 数据上传脚本
-- **线上部署** — Supabase Pro (1012万行) + Vercel Production
+- **Phase 7: 部署配置** — Vercel + Supabase Pro (1012万行) + 自定义域名
 
 ## 本地测试
 
@@ -32,4 +32,4 @@ bun run scripts/export-data.ts  # SQLite → JSON 同步（数据更新后运行
 
 ## 技术栈
 
-Next.js 16 (App Router) / shadcn/ui / Tailwind CSS v4 / Supabase (线上) / SQLite (本地)
+Next.js 16 (App Router) / shadcn/ui / Tailwind CSS v4 / Supabase (线上) / SQLite (本地) / Vercel
