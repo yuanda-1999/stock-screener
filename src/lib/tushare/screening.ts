@@ -181,14 +181,14 @@ function checkProfitGrowth(code: string, filter: { min?: number; max?: number })
 
 async function checkMACD(
   code: string,
-  filter: { months: number; thresholdPct: number }
+  filter: { weeks: number; thresholdPct: number }
 ): Promise<{ macd: number; macdMin: number; macdMax: number; pct: number } | null> {
   // 周线 MACD — 与东方财富一致
   let bars = getWeeklyBars(code);
   if (!bars || bars.length < 35) {
     const now = new Date();
     const startDate = new Date(now);
-    startDate.setMonth(startDate.getMonth() - Math.max(filter.months, 12));
+    startDate.setDate(startDate.getDate() - Math.max(filter.weeks, 52) * 7);
     const startStr = startDate.toISOString().split("T")[0].replace(/-/g, "");
     const rows = await tushareCall(
       "weekly",
@@ -214,7 +214,7 @@ async function checkMACD(
   const macdVals = dif.map((v, i) => 2 * (v - dea[i]));
 
   if (macdVals.length < 2) return null;
-  const lookback = Math.min(macdVals.length, Math.round(filter.months * 4.3));
+  const lookback = Math.min(macdVals.length, filter.weeks);
   const recent = macdVals.slice(-lookback);
   const curMACD = macdVals[macdVals.length - 1];
   const macdMin = Math.min(...recent);

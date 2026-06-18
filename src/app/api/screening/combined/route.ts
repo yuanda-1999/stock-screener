@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
   // === 技术指标 ===
   if (params.get("enable_macd") === "1") {
     filters.macd = {
-      months: parseInt(params.get("macd_months") || "6"),
+      weeks: parseInt(params.get("macd_weeks") || "26"),
       thresholdPct: parseFloat(params.get("macd_threshold") || "20"),
     };
   }

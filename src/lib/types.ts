@@ -88,7 +88,7 @@ export interface KlineLowFilter {
 }
 
 export interface MACDFilter {
-  months: number;
+  weeks: number;
   thresholdPct: number;
 }
 
