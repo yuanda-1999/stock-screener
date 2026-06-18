@@ -71,36 +71,65 @@ export interface LoadOptions {
   needsStocks?: boolean;      // 是否需要股票列表（默认 true）
 }
 
+export interface CandidateLoadOptions {
+  needsDaily?: boolean;
+  needsMonthly?: boolean;
+  needsWeekly?: boolean;
+  needsMACD?: boolean;
+  needsCYQ?: boolean;
+}
+
 // 按候选股代码按需加载 bar 和技术因子数据（跳过核心表）
-export async function loadCandidatesToMemory(codes: string[]) {
-  if (USE_SUPABASE) {
-    const { loadForCodes } = await import("./supabase");
+export async function loadCandidatesToMemory(codes: string[], options: CandidateLoadOptions = {}) {
+  if (!USE_SUPABASE) return;
+  const { loadForCodes } = await import("./supabase");
 
-    const safe = async <T>(label: string, fn: () => Promise<T[]>): Promise<T[]> => {
-      try {
-        return await fn();
-      } catch (e) {
-        console.error(`[cache] ${label} load failed:`, (e as Error).message);
-        return [];
-      }
-    };
+  const safe = async <T>(label: string, fn: () => Promise<T[]>): Promise<T[]> => {
+    try {
+      return await fn();
+    } catch (e) {
+      console.error(`[cache] ${label} load failed:`, (e as Error).message);
+      return [];
+    }
+  };
 
-    const [daily, monthly, weekly, macd, cyq] = await Promise.all([
-      safe("daily_bar", () => loadForCodes("daily_bar_cache", codes, "*", { orderBy: "trade_date" })),
-      safe("monthly_bar", () => loadForCodes("monthly_bar_cache", codes, "*", { orderBy: "trade_date" })),
-      safe("weekly_bar", () => loadForCodes("weekly_bar_cache", codes, "*", { orderBy: "trade_date" })),
-      safe("macd_factor", () => loadForCodes("macd_factor_cache", codes, "*", { orderBy: "trade_date" })),
-      safe("cyq_perf", () => loadForCodes("cyq_perf_cache", codes, "*", { orderBy: "trade_date" })),
-    ]);
+  const jobs: Promise<unknown[]>[] = [];
+  const labels: string[] = [];
 
-    if (daily.length) loadDailyBarsMem(daily as unknown as DailyBar[]);
-    if (monthly.length) loadMonthlyBars(monthly as unknown as MonthlyBar[]);
-    if (weekly.length) loadWeeklyBars(weekly as unknown as WeeklyBar[]);
-    if (macd.length) loadMACDFactors(macd as unknown as MACDFactor[]);
-    if (cyq.length) loadCyqPerf(cyq as unknown as CyqPerf[]);
+  const add = (label: string, cond: boolean | undefined, table: string) => {
+    if (cond) {
+      jobs.push(safe(label, () => loadForCodes(table, codes, "*", { orderBy: "trade_date" })));
+      labels.push(label);
+    }
+  };
 
-    console.log(`[cache] Candidates: ${codes.length} codes → ${daily.length} daily, ${macd.length} macd, ${cyq.length} cyq`);
-  }
+  add("daily_bar", options.needsDaily, "daily_bar_cache");
+  add("monthly_bar", options.needsMonthly, "monthly_bar_cache");
+  add("weekly_bar", options.needsWeekly, "weekly_bar_cache");
+  add("macd_factor", options.needsMACD, "macd_factor_cache");
+  add("cyq_perf", options.needsCYQ, "cyq_perf_cache");
+
+  if (jobs.length === 0) return;
+
+  const results = await Promise.all(jobs);
+  const get = (label: string) => {
+    const idx = labels.indexOf(label);
+    return idx >= 0 ? results[idx] || [] : [];
+  };
+
+  const daily = get("daily_bar");
+  const monthly = get("monthly_bar");
+  const weekly = get("weekly_bar");
+  const macd = get("macd_factor");
+  const cyq = get("cyq_perf");
+
+  if (daily.length) loadDailyBarsMem(daily as unknown as DailyBar[]);
+  if (monthly.length) loadMonthlyBars(monthly as unknown as MonthlyBar[]);
+  if (weekly.length) loadWeeklyBars(weekly as unknown as WeeklyBar[]);
+  if (macd.length) loadMACDFactors(macd as unknown as MACDFactor[]);
+  if (cyq.length) loadCyqPerf(cyq as unknown as CyqPerf[]);
+
+  console.log(`[cache] Candidates: ${codes.length} codes → ${daily.length} daily, ${monthly.length} monthly, ${weekly.length} weekly, ${macd.length} macd, ${cyq.length} cyq`);
 }
 
 // 按候选股代码加载分红数据（避免全量 dividend_cache 加载）

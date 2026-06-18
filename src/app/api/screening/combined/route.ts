@@ -6,17 +6,20 @@ import { tushareCombinedScreening } from "@/lib/tushare/screening";
 import { screenStocksBasic, hasBasicFilters, onlyTechnicalFilters } from "@/lib/screening/db-filter";
 import type { CombinedScreeningFilters } from "@/lib/types";
 
-let _loadedBars = false;
-let _loadedTechFactors = false;
+let _loadedDaily = false;
+let _loadedMACD = false;
+let _loadedCYQ = false;
 let _loadedDividends = false;
 
-// 判断筛选条件是否需要日线数据
-function needsBars(filters: CombinedScreeningFilters): boolean {
+function needsDailyBars(filters: CombinedScreeningFilters): boolean {
   return !!(filters.price || filters.changeRate || filters.amplitude ||
     filters.kdj || filters.rsi || filters.boll || filters.wr || filters.bias || filters.gainers);
 }
-function needsTechFactors(filters: CombinedScreeningFilters): boolean {
-  return !!(filters.macd || filters.chip);
+function needsMACD(filters: CombinedScreeningFilters): boolean {
+  return !!filters.macd;
+}
+function needsCYQ(filters: CombinedScreeningFilters): boolean {
+  return !!filters.chip;
 }
 function needsDividends(filters: CombinedScreeningFilters): boolean {
   return !!(filters.dividend || filters.dividendYield);
@@ -107,8 +110,9 @@ export async function GET(req: NextRequest) {
   const limitCodes = codesParam ? codesParam.split(",") : undefined;
 
   // 按需加载判断
-  const wantBars = needsBars(filters);
-  const wantTechFactors = needsTechFactors(filters);
+  const wantDaily = needsDailyBars(filters);
+  const wantMACD = needsMACD(filters);
+  const wantCYQ = needsCYQ(filters);
   const wantDividends = needsDividends(filters);
 
   // SSE 流
@@ -164,7 +168,7 @@ export async function GET(req: NextRequest) {
               await loadDividendsForCandidates(candidateCodes);
               _loadedDividends = true;
             }
-          } else if (!_loadedBars && !_loadedTechFactors && !_loadedDividends) {
+          } else if (!_loadedDaily && !_loadedMACD && !_loadedCYQ && !_loadedDividends) {
             // DB 未运行/失败 → 全量加载核心表
             send({ type: "loading", message: "正在加载核心数据..." });
             await loadAllToMemory({
@@ -176,11 +180,23 @@ export async function GET(req: NextRequest) {
           }
 
           // 候选股的 bar/技术因子按需加载
-          if ((wantBars && !_loadedBars) || (wantTechFactors && !_loadedTechFactors)) {
-            send({ type: "loading", message: `正在加载 ${candidateCodes.length} 只候选股日线数据...` });
-            await loadCandidatesToMemory(candidateCodes);
-            if (wantBars) _loadedBars = true;
-            if (wantTechFactors) _loadedTechFactors = true;
+          const loadDaily = wantDaily && !_loadedDaily;
+          const loadMACD = wantMACD && !_loadedMACD;
+          const loadCYQ = wantCYQ && !_loadedCYQ;
+          if (loadDaily || loadMACD || loadCYQ) {
+            const parts: string[] = [];
+            if (loadDaily) parts.push("日线");
+            if (loadMACD) parts.push("MACD");
+            if (loadCYQ) parts.push("筹码");
+            send({ type: "loading", message: `正在加载 ${candidateCodes.length} 只候选股数据 (${parts.join("/")})...` });
+            await loadCandidatesToMemory(candidateCodes, {
+              needsDaily: loadDaily,
+              needsMACD: loadMACD,
+              needsCYQ: loadCYQ,
+            });
+            if (loadDaily) _loadedDaily = true;
+            if (loadMACD) _loadedMACD = true;
+            if (loadCYQ) _loadedCYQ = true;
           }
         } else if (candidateCodes && candidateCodes.length === 0) {
           // DB 筛选无结果，直接返回
@@ -191,14 +207,15 @@ export async function GET(req: NextRequest) {
           // 回退：全量加载
           send({ type: "loading", message: "正在加载全量数据..." });
           await loadAllToMemory({
-            needsBars: wantBars && !_loadedBars,
-            needsTechFactors: wantTechFactors && !_loadedTechFactors,
+            needsBars: (wantDaily && !_loadedDaily) || (wantMACD && !_loadedMACD) || (wantCYQ && !_loadedCYQ),
+            needsTechFactors: (wantMACD && !_loadedMACD) || (wantCYQ && !_loadedCYQ),
             needsDividends: wantDividends && !_loadedDividends,
             needsDailyBasic: !dbRows,
             needsFinance: !dbRows,
           });
-          if (wantBars) _loadedBars = true;
-          if (wantTechFactors) _loadedTechFactors = true;
+          if (wantDaily) _loadedDaily = true;
+          if (wantMACD) _loadedMACD = true;
+          if (wantCYQ) _loadedCYQ = true;
           if (wantDividends) _loadedDividends = true;
         }
 
