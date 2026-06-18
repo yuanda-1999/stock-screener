@@ -1,5 +1,5 @@
 -- 数据库层筛选函数：对简单指标做 SQL 过滤，缩减候选集
--- 技术指标（MACD/KDJ/RSI/BOLL/WR/BIAS/筹码/分红）仍由 JS 层处理
+-- 技术指标（MACD/KDJ/RSI/BOLL/WR/BIAS/筹码）仍由 JS 层处理
 -- 用法: SELECT * FROM screen_stocks_basic('{"pe":{"min":10,"max":30}}'::jsonb);
 
 CREATE OR REPLACE FUNCTION screen_stocks_basic(filters jsonb)
@@ -36,7 +36,7 @@ AS $$
     fin.debt_to_assets, fin.revenue_growth, fin.profit_growth
   FROM stock_basic_cache sb
 
-  -- 最新日线（2条：今日 + 昨日，用于价格/涨跌幅/振幅）
+  -- 最新日线（2条：今日 + 昨日，用于价格/涨跌幅/振幅/股息率）
   LEFT JOIN LATERAL (
     SELECT d0.close, d0.high, d0.low, d1.close AS prev_close,
       CASE WHEN d1.close > 0 THEN ((d0.close - d1.close) / d1.close) * 100 END AS change_pct,
@@ -74,6 +74,25 @@ AS $$
     ORDER BY end_date DESC
     LIMIT 1
   ) fin ON true
+
+  -- 分红（指定年份 + 最低每股分红）
+  LEFT JOIN LATERAL (
+    SELECT 1 AS has_dividend
+    FROM dividend_cache
+    WHERE code = sb.code
+      AND end_date LIKE (filters->'dividend'->>'year')::text || '%'
+      AND cash_div >= (filters->'dividend'->>'minCashDiv')::numeric
+    LIMIT 1
+  ) div ON true
+
+  -- 最近一次分红（用于股息率）
+  LEFT JOIN LATERAL (
+    SELECT cash_div
+    FROM dividend_cache
+    WHERE code = sb.code
+    ORDER BY end_date DESC
+    LIMIT 1
+  ) latest_div ON true
 
   WHERE
     -- 价格
@@ -165,5 +184,15 @@ AS $$
     AND (filters->'gainers' IS NULL OR (
       bars.change_pct IS NOT NULL
       AND bars.change_pct >= (filters->'gainers'->>'thresholdPct')::numeric
+    ))
+    -- 分红（指定年份 + 最低每股现金分红）
+    AND (filters->'dividend' IS NULL OR div.has_dividend IS NOT NULL)
+    -- 股息率 = (最近一次现金分红 / 最新收盘价) * 100
+    AND (filters->'dividendYield' IS NULL OR (
+      latest_div.cash_div > 0 AND bars.close > 0
+      AND ((filters->'dividendYield'->>'min')::numeric IS NULL
+           OR (latest_div.cash_div / bars.close) * 100 >= (filters->'dividendYield'->>'min')::numeric)
+      AND ((filters->'dividendYield'->>'max')::numeric IS NULL
+           OR (latest_div.cash_div / bars.close) * 100 <= (filters->'dividendYield'->>'max')::numeric)
     ));
 $$;

@@ -49,6 +49,8 @@ function filtersToJsonb(filters: CombinedScreeningFilters): Record<string, unkno
   if (filters.revenueGrowth) obj.revenueGrowth = filters.revenueGrowth;
   if (filters.profitGrowth) obj.profitGrowth = filters.profitGrowth;
   if (filters.gainers) obj.gainers = filters.gainers;
+  if (filters.dividend) obj.dividend = filters.dividend;
+  if (filters.dividendYield) obj.dividendYield = filters.dividendYield;
   return obj;
 }
 
@@ -59,7 +61,7 @@ export function hasBasicFilters(filters: CombinedScreeningFilters): boolean {
     filters.amplitude || filters.pe || filters.pb || filters.roe ||
     filters.eps || filters.grossMargin || filters.netMargin ||
     filters.debtRatio || filters.revenueGrowth || filters.profitGrowth ||
-    filters.gainers);
+    filters.gainers || filters.dividend || filters.dividendYield);
 }
 
 // 判断是否只有技术指标筛选（无法在 DB 层过滤）
