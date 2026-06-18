@@ -146,7 +146,7 @@ BEGIN
 
   IF need_chip THEN
     sql_query := sql_query || 'LEFT JOIN LATERAL ('
-      || 'SELECT ((cost_95pct - cost_5pct) / NULLIF((cost_95pct + cost_5pct) / 2, 0)) * 100 AS concentration '
+      || 'SELECT ((cost_95pct - cost_5pct) / NULLIF(cost_95pct + cost_5pct, 0)) * 100 AS concentration '
       || 'FROM cyq_perf_cache WHERE code = sb.code ORDER BY trade_date DESC LIMIT 1'
       || ') chip ON true ';
   END IF;
