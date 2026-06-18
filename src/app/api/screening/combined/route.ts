@@ -136,7 +136,9 @@ export async function GET(req: NextRequest) {
             dbRows = result.rows;
             send({ type: "loading", message: `数据库筛选完成: ${result.codes.length} 只候选股` });
           } catch (e) {
-            console.error("[screening] DB screening failed, falling back to full scan:", (e as Error).message);
+            const msg = (e as Error).message || String(e);
+            console.error("[screening] DB screening failed, falling back to full scan:", msg);
+            send({ type: "loading", message: `数据库筛选失败 (${msg.slice(0, 80)})，回退全量扫描...` });
             candidateCodes = undefined;
           }
         }
