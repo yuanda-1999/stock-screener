@@ -1,7 +1,7 @@
 // SSE 组合筛选 API
 // 两层筛选：DB 过滤简单指标 → JS 检查技术指标
 import { NextRequest } from "next/server";
-import { loadAllToMemory, loadCandidatesToMemory } from "@/lib/cache/index";
+import { loadAllToMemory, loadCandidatesToMemory, loadDividendsForCandidates } from "@/lib/cache/index";
 import { tushareCombinedScreening } from "@/lib/tushare/screening";
 import { screenStocksBasic, hasBasicFilters, onlyTechnicalFilters } from "@/lib/screening/db-filter";
 import type { CombinedScreeningFilters } from "@/lib/types";
@@ -147,17 +147,21 @@ export async function GET(req: NextRequest) {
 
         if (candidateCodes && candidateCodes.length > 0) {
           if (dbHandledCore) {
-            // DB 已处理基础筛选 → 只加载 JS 仍需的表（展示值 + 分红）
-            const loadDividendsOnly = wantDividends && !_loadedDividends;
-            if (loadDividendsOnly || needsDailyBasicForJS || needsFinanceForJS) {
+            // DB 已处理基础筛选 → 只加载 JS 仍需的数据
+            if (needsDailyBasicForJS || needsFinanceForJS) {
               await loadAllToMemory({
                 needsBars: false, needsTechFactors: false,
                 needsStocks: true,
                 needsDailyBasic: needsDailyBasicForJS,
                 needsFinance: needsFinanceForJS,
-                needsDividends: loadDividendsOnly,
+                needsDividends: false,
               });
-              if (wantDividends) _loadedDividends = true;
+            }
+            // 分红：按候选股代码加载，避免全量 94K 行加载
+            if (wantDividends && !_loadedDividends) {
+              send({ type: "loading", message: `正在加载 ${candidateCodes.length} 只候选股分红数据...` });
+              await loadDividendsForCandidates(candidateCodes);
+              _loadedDividends = true;
             }
           } else if (!_loadedBars && !_loadedTechFactors && !_loadedDividends) {
             // DB 未运行/失败 → 全量加载核心表

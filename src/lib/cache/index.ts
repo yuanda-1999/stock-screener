@@ -103,6 +103,19 @@ export async function loadCandidatesToMemory(codes: string[]) {
   }
 }
 
+// 按候选股代码加载分红数据（避免全量 dividend_cache 加载）
+export async function loadDividendsForCandidates(codes: string[]) {
+  if (!USE_SUPABASE) return;
+  const { loadForCodes } = await import("./supabase");
+  try {
+    const rows = await loadForCodes("dividend_cache", codes, "*");
+    if (rows.length) loadDividends(rows as unknown as DividendRecord[]);
+    console.log(`[cache] Dividends for ${codes.length} codes: ${rows.length} rows`);
+  } catch (e) {
+    console.error("[cache] dividend_cache load failed:", (e as Error).message);
+  }
+}
+
 export async function loadAllToMemory(options: LoadOptions = {}) {
   if (USE_SUPABASE) {
     const { loadAllFromSupabase } = await import("./supabase");
