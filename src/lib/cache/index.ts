@@ -77,6 +77,7 @@ export interface CandidateLoadOptions {
   needsWeekly?: boolean;
   needsMACD?: boolean;
   needsCYQ?: boolean;
+  maxRows?: number;
 }
 
 // 按候选股代码按需加载 bar 和技术因子数据（跳过核心表）
@@ -98,7 +99,9 @@ export async function loadCandidatesToMemory(codes: string[], options: Candidate
 
   const add = (label: string, cond: boolean | undefined, table: string) => {
     if (cond) {
-      jobs.push(safe(label, () => loadForCodes(table, codes, "*", { orderBy: "trade_date" })));
+      const loadOpts: { orderBy?: string; maxRows?: number } = { orderBy: "trade_date" };
+      if (options.maxRows) loadOpts.maxRows = options.maxRows;
+      jobs.push(safe(label, () => loadForCodes(table, codes, "*", loadOpts)));
       labels.push(label);
     }
   };

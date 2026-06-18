@@ -12,6 +12,7 @@ export function getSupabase() {
 
 interface LoadOptions {
   limit?: number;
+  maxRows?: number;
   orderBy?: string;
   ascending?: boolean;
 }
@@ -63,6 +64,7 @@ export async function loadForCodes(
       if (error) throw error;
       if (!data || data.length === 0) break;
       all.push(...(data as unknown as Record<string, unknown>[]));
+      if (options?.maxRows && all.length >= options.maxRows) break;
       if (data.length < PAGE) break;
     }
   }

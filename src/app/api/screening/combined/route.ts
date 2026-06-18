@@ -190,11 +190,14 @@ export async function GET(req: NextRequest) {
             if (loadDaily) parts.push("日线");
             if (loadMACD) parts.push("MACD");
             if (loadCYQ) parts.push("筹码");
+            // maxRows: 日线需要历史数据计算指标（~60条/股），MACD/筹码只需验证（~3条/股）
+            const maxRows = loadDaily ? candidateCodes.length * 60 : candidateCodes.length * 3;
             send({ type: "loading", message: `正在加载 ${candidateCodes.length} 只候选股数据 (${parts.join("/")})...` });
             await loadCandidatesToMemory(candidateCodes, {
               needsDaily: loadDaily,
               needsMACD: loadMACD,
               needsCYQ: loadCYQ,
+              maxRows,
             });
             if (loadDaily) _loadedDaily = true;
             if (loadMACD) _loadedMACD = true;
