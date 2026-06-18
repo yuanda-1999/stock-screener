@@ -9,10 +9,8 @@ import {
   getMonthlyBars,
   getWeeklyBars,
   getDividendsForCode,
-  getMACDFactors,
   getCyqPerf,
   putDividend,
-  putMACDFactor,
   putCyqPerf,
   getDailyBasic,
   getLatestFinance,
@@ -185,42 +183,42 @@ async function checkMACD(
   code: string,
   filter: { months: number; thresholdPct: number }
 ): Promise<{ macd: number; macdMin: number; macdMax: number; pct: number } | null> {
-  const now = new Date();
-  const startDate = new Date(now);
-  startDate.setMonth(startDate.getMonth() - filter.months);
-  const startStr = startDate.toISOString().split("T")[0].replace(/-/g, "");
-
-  let factors = getMACDFactors(code);
-  if (!factors || factors.length === 0) {
+  // 周线 MACD — 与东方财富一致
+  let bars = getWeeklyBars(code);
+  if (!bars || bars.length < 35) {
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setMonth(startDate.getMonth() - Math.max(filter.months, 12));
+    const startStr = startDate.toISOString().split("T")[0].replace(/-/g, "");
     const rows = await tushareCall(
-      "daily",
+      "weekly",
       { ts_code: tsCode(code), start_date: startStr, end_date: now.toISOString().split("T")[0].replace(/-/g, "") },
       "trade_date,close"
     );
     if (rows.length < 35) return null;
-    const closes = rows
-      .map((d) => ({ date: String(d.trade_date || ""), close: Number(d.close || 0) }))
-      .filter((c) => c.close > 0)
-      .sort((a, b) => a.date.localeCompare(b.date));
-    const vals = closes.map((c) => c.close);
-    const ema12 = calcEMA(vals, 12);
-    const ema26 = calcEMA(vals, 26);
-    const dif = ema12.map((v, i) => v - ema26[i]);
-    const dea = calcEMA(dif, 9);
-    const macdData = [];
-    for (let i = 33; i < vals.length; i++) {
-      macdData.push({ code, trade_date: closes[i].date, macd: 2 * (dif[i] - dea[i]) });
-    }
-    putMACDFactor(code, macdData);
-    factors = macdData;
+    bars = rows.map((r) => ({
+      trade_date: String(r.trade_date || ""),
+      close: Number(r.close || 0),
+      high: 0, low: 0,
+    })).filter((b) => b.close > 0);
   }
 
-  if (factors.length < 2) return null;
-  factors.sort((a, b) => a.trade_date.localeCompare(b.trade_date));
-  const recent = factors.slice(-Math.min(factors.length, filter.months * 21));
-  const curMACD = factors[factors.length - 1].macd;
-  const macdMin = Math.min(...recent.map((f) => f.macd));
-  const macdMax = Math.max(...recent.map((f) => f.macd));
+  const sorted = [...bars].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+  const closes = sorted.map((b) => b.close);
+  if (closes.length < 35) return null;
+
+  const ema12 = calcEMA(closes, 12);
+  const ema26 = calcEMA(closes, 26);
+  const dif = ema12.map((v, i) => v - ema26[i]);
+  const dea = calcEMA(dif, 9);
+  const macdVals = dif.map((v, i) => 2 * (v - dea[i]));
+
+  if (macdVals.length < 2) return null;
+  const lookback = Math.min(macdVals.length, Math.round(filter.months * 4.3));
+  const recent = macdVals.slice(-lookback);
+  const curMACD = macdVals[macdVals.length - 1];
+  const macdMin = Math.min(...recent);
+  const macdMax = Math.max(...recent);
   const range = macdMax - macdMin;
   if (range <= 0) return null;
   const pct = ((curMACD - macdMin) / range) * 100;
