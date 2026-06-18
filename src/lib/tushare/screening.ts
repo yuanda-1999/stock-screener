@@ -197,13 +197,15 @@ async function checkMACD(
     );
     if (rows.length < 35) return null;
     bars = rows.map((r) => ({
+      code,
       trade_date: String(r.trade_date || ""),
       close: Number(r.close || 0),
       high: 0, low: 0,
     })).filter((b) => b.close > 0);
   }
 
-  const sorted = [...bars].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+  const list = bars!;
+  const sorted = [...list].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
   const closes = sorted.map((b) => b.close);
   if (closes.length < 35) return null;
 
