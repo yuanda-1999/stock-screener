@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLatestTradeDate, fetchDailyBars, fetchDailyBasic } from "@/lib/tushare/bulk-fetch";
 import { upsertToSupabase } from "@/lib/cache/supabase";
+import { recomputeForDate } from "@/lib/screening/indicator-recompute";
 
 export const maxDuration = 300;
 
@@ -42,6 +43,16 @@ export async function GET(req: NextRequest) {
     if (basics.length > 0) {
       await upsertToSupabase("daily_basic_cache", basics as unknown as Record<string, unknown>[]);
       results.push("基本面数据已写入 Supabase");
+    }
+
+    // 5. 重算技术指标
+    if (bars.length > 0) {
+      try {
+        const counts = await recomputeForDate(tradeDate);
+        results.push(`技术指标已更新: KDJ=${counts.kdj}, RSI=${counts.rsi}, BOLL=${counts.boll}, WR=${counts.wr}, BIAS=${counts.bias}`);
+      } catch (e) {
+        results.push(`技术指标更新失败: ${(e as Error).message}`);
+      }
     }
 
     if (bars.length === 0 && basics.length === 0) {

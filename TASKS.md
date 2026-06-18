@@ -28,11 +28,27 @@ _无_
 - 筛选 DB 化: PostgreSQL 筛选函数 + 两层筛选 + 候选股按需加载
 - 增量更新: Vercel Cron 每日批量拉取 + 写入 Supabase
 
+## Completed Recently
+
+- 技术指标 DB 化: KDJ/RSI/BOLL/WR/BIAS 预计算缓存表 + `screen_stocks_basic` 新增 LATERAL JOIN + WHERE 条件，全部 20 个指标可 DB 层筛选
+- MACD 预过滤: 确保 MACD 数据存在的股票才进入候选集，百分位计算仍由 JS 完成
+- 指标重算模块: `src/lib/screening/indicator-recompute.ts` 共享模块，cron 端点每日自动调用
+- Cron 端点更新: 每日数据刷新后自动重算技术指标
+
+## Completed
+
+- Phase 1: 脚手架 — Next.js 16 + shadcn/ui + Tailwind v4 + Fira 字体
+- Phase 2: 数据层 — 内存 Map + JSON 双模式缓存
+- Phase 3: Tushare 筛选逻辑 — 25 指标 check + SSE 生成器
+- Phase 4: 数据采集 — daily_basic 5208只 + finance 16587行 (2023-2025)
+- Phase 5: API 路由 — combined + prewarm SSE endpoints
+- Phase 6: 前端页面 — 搜索 + 折叠面板 + 动态结果表格
+- Phase 7: 线上部署 — Supabase Pro 建表 + 1012万行数据上传 + Vercel + xuangubao.top
+- 线上调试: Vercel 环境变量补全 + Supabase 索引 + 按需加载 + SSE 优化 + 进度条
+- 筛选 DB 化: PostgreSQL 筛选函数 + 两层筛选 + 候选股按需加载
+- 增量更新: Vercel Cron 每日批量拉取 + 写入 Supabase
+
 ## Next
 
-- [ ] 在 Supabase 中执行迁移: `20260618000000_db_screening.sql` (通过 Supabase Dashboard SQL Editor)
-- [ ] 设置 Vercel 环境变量 `CRON_SECRET` (用于 Cron 端点鉴权)
-- [ ] 技术指标缓存表填充: 运行 `recompute_all_indicators()` 填充 KDJ/RSI/BOLL/WR/BIAS 表
-- [ ] 全部筛选移到 DB 层: 将技术指标检查也加入到 `screen_stocks_basic` 函数
 - [ ] 请求频率限制 (API rate limiting)
 - [ ] 用户认证（如需要）

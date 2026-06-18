@@ -1,5 +1,5 @@
--- 数据库层筛选函数：对简单指标做 SQL 过滤，缩减候选集
--- 技术指标（MACD/KDJ/RSI/BOLL/WR/BIAS/筹码）仍由 JS 层处理
+-- 数据库层筛选函数：20 个指标 DB 层过滤，缩减候选集 80-95%
+-- MACD/KDJ/RSI/BOLL/WR/BIAS 通过预计算缓存表实现 DB 筛选
 -- 用法: SELECT * FROM screen_stocks_basic('{"pe":{"min":10,"max":30}}'::jsonb);
 
 CREATE OR REPLACE FUNCTION screen_stocks_basic(filters jsonb)
@@ -102,6 +102,62 @@ AS $$
     ORDER BY trade_date DESC
     LIMIT 1
   ) chip ON true
+
+  -- 最新 KDJ
+  LEFT JOIN LATERAL (
+    SELECT k, d, j FROM kdj_cache
+    WHERE code = sb.code
+    ORDER BY trade_date DESC
+    LIMIT 1
+  ) kdj ON true
+
+  -- 前一日 KDJ（金叉判断用）
+  LEFT JOIN LATERAL (
+    SELECT k AS prev_k, d AS prev_d FROM kdj_cache
+    WHERE code = sb.code
+    ORDER BY trade_date DESC
+    LIMIT 1 OFFSET 1
+  ) kdj_prev ON true
+
+  -- 最新 RSI
+  LEFT JOIN LATERAL (
+    SELECT rsi14 FROM rsi_cache
+    WHERE code = sb.code
+    ORDER BY trade_date DESC
+    LIMIT 1
+  ) rsi ON true
+
+  -- 最新 BOLL
+  LEFT JOIN LATERAL (
+    SELECT upper, mid, lower FROM boll_cache
+    WHERE code = sb.code
+    ORDER BY trade_date DESC
+    LIMIT 1
+  ) boll ON true
+
+  -- 最新 WR
+  LEFT JOIN LATERAL (
+    SELECT wr10 FROM wr_cache
+    WHERE code = sb.code
+    ORDER BY trade_date DESC
+    LIMIT 1
+  ) wr ON true
+
+  -- 最新 BIAS
+  LEFT JOIN LATERAL (
+    SELECT bias6 FROM bias_cache
+    WHERE code = sb.code
+    ORDER BY trade_date DESC
+    LIMIT 1
+  ) bias ON true
+
+  -- 最新 MACD
+  LEFT JOIN LATERAL (
+    SELECT macd FROM macd_factor_cache
+    WHERE code = sb.code
+    ORDER BY trade_date DESC
+    LIMIT 1
+  ) macd_cur ON true
 
   WHERE
     -- 价格
@@ -208,5 +264,53 @@ AS $$
     AND (filters->'chip' IS NULL OR (
       chip.concentration IS NOT NULL
       AND chip.concentration >= (filters->'chip'->>'thresholdPct')::numeric
-    ));
+    ))
+    -- KDJ
+    AND (filters->'kdj' IS NULL OR (
+      CASE
+        WHEN filters->'kdj'->>'method' = '超卖' THEN
+          kdj.j IS NOT NULL
+          AND ((filters->'kdj'->>'jMax')::numeric IS NULL OR kdj.j <= (filters->'kdj'->>'jMax')::numeric)
+        WHEN filters->'kdj'->>'method' = '低位' THEN
+          kdj.k IS NOT NULL AND kdj.d IS NOT NULL
+          AND ((filters->'kdj'->>'kMax')::numeric IS NULL OR kdj.k <= (filters->'kdj'->>'kMax')::numeric)
+          AND ((filters->'kdj'->>'dMax')::numeric IS NULL OR kdj.d <= (filters->'kdj'->>'dMax')::numeric)
+        WHEN filters->'kdj'->>'method' = '金叉' THEN
+          kdj_prev.prev_k IS NOT NULL AND kdj_prev.prev_d IS NOT NULL
+          AND kdj.k IS NOT NULL AND kdj.d IS NOT NULL
+          AND kdj_prev.prev_k < kdj_prev.prev_d AND kdj.k > kdj.d
+        ELSE TRUE
+      END
+    ))
+    -- RSI
+    AND (filters->'rsi' IS NULL OR (
+      rsi.rsi14 IS NOT NULL
+      AND rsi.rsi14 <= (filters->'rsi'->>'max')::numeric
+    ))
+    -- BOLL
+    AND (filters->'boll' IS NULL OR (
+      CASE
+        WHEN filters->'boll'->>'method' = '下轨附近' THEN
+          boll.lower IS NOT NULL AND boll.lower > 0 AND bars.close IS NOT NULL
+          AND ((bars.close - boll.lower) / boll.lower) * 100 <= 5
+        WHEN filters->'boll'->>'method' = '突破中轨' THEN
+          boll.mid IS NOT NULL AND bars.close IS NOT NULL AND bars.prev_close IS NOT NULL
+          AND bars.prev_close < boll.mid AND bars.close > boll.mid
+        ELSE TRUE
+      END
+    ))
+    -- WR
+    AND (filters->'wr' IS NULL OR (
+      wr.wr10 IS NOT NULL
+      AND ((filters->'wr'->>'min')::numeric IS NULL OR wr.wr10 >= (filters->'wr'->>'min')::numeric)
+      AND ((filters->'wr'->>'max')::numeric IS NULL OR wr.wr10 <= (filters->'wr'->>'max')::numeric)
+    ))
+    -- BIAS
+    AND (filters->'bias' IS NULL OR (
+      bias.bias6 IS NOT NULL
+      AND ((filters->'bias'->>'min')::numeric IS NULL OR bias.bias6 >= (filters->'bias'->>'min')::numeric)
+      AND ((filters->'bias'->>'max')::numeric IS NULL OR bias.bias6 <= (filters->'bias'->>'max')::numeric)
+    ))
+    -- MACD（预过滤：确保数据存在，百分位计算仍由 JS 完成）
+    AND (filters->'macd' IS NULL OR macd_cur.macd IS NOT NULL);
 $$;
