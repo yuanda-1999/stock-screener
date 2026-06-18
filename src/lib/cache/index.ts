@@ -66,6 +66,9 @@ export interface LoadOptions {
   needsBars?: boolean;       // 是否需要日线/周线/月线（技术指标用）
   needsTechFactors?: boolean; // 是否需要 MACD/CYQ（MACD/筹码用）
   needsDividends?: boolean;   // 是否需要分红数据
+  needsDailyBasic?: boolean;  // 是否需要每日基本面（PE/PB/市值等，默认 true）
+  needsFinance?: boolean;     // 是否需要财务指标（ROE/EPS等，默认 true）
+  needsStocks?: boolean;      // 是否需要股票列表（默认 true）
 }
 
 // 按候选股代码按需加载 bar 和技术因子数据（跳过核心表）
@@ -113,30 +116,49 @@ export async function loadAllToMemory(options: LoadOptions = {}) {
       }
     };
 
-    // 核心表（始终加载，数据量小）
-    const coreJobs: Promise<unknown[]>[] = [
-      safe("stock_basic_cache", () => loadAllFromSupabase("stock_basic_cache")),
-      safe("daily_basic_cache", () => loadAllFromSupabase("daily_basic_cache", "*", { orderBy: "trade_date", limit: 20_000 })),
-      safe("finance_cache", () => loadAllFromSupabase("finance_cache", "*", { orderBy: "end_date", limit: 20_000 })),
-    ];
+    // 核心表按需加载
+    const coreJobs: Promise<unknown[]>[] = [];
+    const jobLabels: string[] = [];
 
-    // 条件加载
+    const needsStocks = options.needsStocks !== false;
+    const needsDailyBasic = options.needsDailyBasic !== false;
+    const needsFinance = options.needsFinance !== false;
+
+    if (needsStocks) {
+      coreJobs.push(safe("stock_basic_cache", () => loadAllFromSupabase("stock_basic_cache")));
+      jobLabels.push("stocks");
+    }
+    if (needsDailyBasic) {
+      coreJobs.push(safe("daily_basic_cache", () => loadAllFromSupabase("daily_basic_cache", "*", { orderBy: "trade_date", limit: 20_000 })));
+      jobLabels.push("dailyBasic");
+    }
+    if (needsFinance) {
+      coreJobs.push(safe("finance_cache", () => loadAllFromSupabase("finance_cache", "*", { orderBy: "end_date", limit: 20_000 })));
+      jobLabels.push("finance");
+    }
     if (options.needsDividends) {
       coreJobs.push(safe("dividend_cache", () => loadAllFromSupabase("dividend_cache")));
+      jobLabels.push("dividends");
     }
 
     const coreResults = await Promise.all(coreJobs);
-    const [stocks, dailyBasic, finance, divid] = [
-      coreResults[0],
-      coreResults[1],
-      coreResults[2],
-      options.needsDividends ? coreResults[3] || [] : [],
-    ];
+    const getResult = (label: string) => {
+      const idx = jobLabels.indexOf(label);
+      return idx >= 0 ? coreResults[idx] || [] : [];
+    };
+    const stocks = getResult("stocks");
+    const dailyBasic = getResult("dailyBasic");
+    const finance = getResult("finance");
+    const divid = getResult("dividends");
 
-    if (!stocks.length) throw new Error("stock_basic_cache is empty — check Supabase connection");
-    loadStockNames(new Map((stocks as Record<string, unknown>[]).map((s) => [s.code as string, s.name as string])));
-    if (dailyBasic.length) loadDailyBasics(dailyBasic as unknown as DailyBasic[]);
-    if (finance.length) loadFinances(finance as unknown as FinanceIndicator[]);
+    if (needsStocks) {
+      if (!stocks.length) throw new Error("stock_basic_cache is empty — check Supabase connection");
+      loadStockNames(new Map((stocks as Record<string, unknown>[]).map((s) => [s.code as string, s.name as string])));
+    } else {
+      // 兜底：确保 loadStockNames 在内存中有数据（DB 筛选模式不需要重新加载）
+    }
+    if (needsDailyBasic && dailyBasic.length) loadDailyBasics(dailyBasic as unknown as DailyBasic[]);
+    if (needsFinance && finance.length) loadFinances(finance as unknown as FinanceIndicator[]);
     if (options.needsDividends) loadDividends(divid as unknown as DividendRecord[]);
 
     let daily: unknown[] = [];

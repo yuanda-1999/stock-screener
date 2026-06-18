@@ -121,14 +121,16 @@ export async function GET(req: NextRequest) {
       try {
         // 第一步：尝试 DB 层筛选
         let candidateCodes: string[] | undefined = limitCodes;
+        let dbRows: import("@/lib/screening/db-filter").DBScreeningRow[] | undefined;
         const useDBScreening = !limitCodes && hasBasicFilters(filters);
 
         if (useDBScreening) {
           send({ type: "loading", message: "正在数据库筛选..." });
           try {
-            const { codes } = await screenStocksBasic(filters);
-            candidateCodes = codes;
-            send({ type: "loading", message: `数据库筛选完成: ${codes.length} 只候选股` });
+            const result = await screenStocksBasic(filters);
+            candidateCodes = result.codes;
+            dbRows = result.rows;
+            send({ type: "loading", message: `数据库筛选完成: ${result.codes.length} 只候选股` });
           } catch (e) {
             console.error("[screening] DB screening failed, falling back to full scan:", (e as Error).message);
             candidateCodes = undefined;
@@ -136,10 +138,30 @@ export async function GET(req: NextRequest) {
         }
 
         // 第二步：加载数据到内存
+        // 判断是否仍需加载 core 表（DB 筛选返回了结果 ≠ 可以不加载；仍需看 JS 是否需要这些值做展示）
+        const needsDailyBasicForJS = !!(filters.pe || filters.pb || filters.turnover ||
+          filters.volumeRatio || filters.totalMv || filters.circMv);
+        const needsFinanceForJS = !!(filters.roe || filters.eps || filters.grossMargin ||
+          filters.netMargin || filters.debtRatio || filters.revenueGrowth || filters.profitGrowth);
+        const dbHandledCore = useDBScreening && dbRows && dbRows.length > 0;
+
         if (candidateCodes && candidateCodes.length > 0) {
-          // 核心表全量加载（数据量小）
-          if (!_loadedBars && !_loadedTechFactors && !_loadedDividends) {
-            send({ type: "loading", message: `正在加载核心数据...` });
+          if (dbHandledCore) {
+            // DB 已处理基础筛选 → 只加载 JS 仍需的表（展示值 + 分红）
+            const loadDividendsOnly = wantDividends && !_loadedDividends;
+            if (loadDividendsOnly || needsDailyBasicForJS || needsFinanceForJS) {
+              await loadAllToMemory({
+                needsBars: false, needsTechFactors: false,
+                needsStocks: true,
+                needsDailyBasic: needsDailyBasicForJS,
+                needsFinance: needsFinanceForJS,
+                needsDividends: loadDividendsOnly,
+              });
+              if (wantDividends) _loadedDividends = true;
+            }
+          } else if (!_loadedBars && !_loadedTechFactors && !_loadedDividends) {
+            // DB 未运行/失败 → 全量加载核心表
+            send({ type: "loading", message: "正在加载核心数据..." });
             await loadAllToMemory({
               needsBars: false,
               needsTechFactors: false,
@@ -168,6 +190,8 @@ export async function GET(req: NextRequest) {
             needsBars: wantBars && !_loadedBars,
             needsTechFactors: wantTechFactors && !_loadedTechFactors,
             needsDividends: wantDividends && !_loadedDividends,
+            needsDailyBasic: !dbRows,
+            needsFinance: !dbRows,
           });
           if (wantBars) _loadedBars = true;
           if (wantTechFactors) _loadedTechFactors = true;
