@@ -105,15 +105,29 @@ export async function loadCandidatesToMemory(codes: string[]) {
 
 // 按候选股代码加载分红数据（避免全量 dividend_cache 加载）
 export async function loadDividendsForCandidates(codes: string[]) {
-  if (!USE_SUPABASE) return;
-  const { loadForCodes } = await import("./supabase");
-  try {
-    const rows = await loadForCodes("dividend_cache", codes, "*");
-    if (rows.length) loadDividends(rows as unknown as DividendRecord[]);
-    console.log(`[cache] Dividends for ${codes.length} codes: ${rows.length} rows`);
-  } catch (e) {
-    console.error("[cache] dividend_cache load failed:", (e as Error).message);
+  if (!USE_SUPABASE || codes.length === 0) return;
+  const { getSupabase } = await import("./supabase");
+  const sb = getSupabase();
+
+  const all: Record<string, unknown>[] = [];
+  const CHUNK = 50;
+  for (let c = 0; c < codes.length; c += CHUNK) {
+    const chunk = codes.slice(c, c + CHUNK);
+    for (let page = 0; page < 500; page++) {
+      const { data, error } = await sb.from("dividend_cache").select("*")
+        .in("code", chunk)
+        .range(page * 1000, page * 1000 + 999);
+      if (error) {
+        console.error("[cache] dividend_cache load error:", error.message);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      all.push(...(data as unknown as Record<string, unknown>[]));
+      if (data.length < 1000) break;
+    }
   }
+  if (all.length) loadDividends(all as unknown as DividendRecord[]);
+  console.log(`[cache] Dividends for ${codes.length} codes: ${all.length} rows`);
 }
 
 export async function loadAllToMemory(options: LoadOptions = {}) {

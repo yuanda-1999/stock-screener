@@ -147,11 +147,12 @@ export async function GET(req: NextRequest) {
 
         if (candidateCodes && candidateCodes.length > 0) {
           if (dbHandledCore) {
-            // DB 已处理基础筛选 → 只加载 JS 仍需的数据
-            if (needsDailyBasicForJS || needsFinanceForJS) {
+            // 始终加载股票名称（用于结果显示）
+            const needStocks = !_loadedDividends; // 首次 DB 成功时加载
+            if (needsDailyBasicForJS || needsFinanceForJS || needStocks) {
               await loadAllToMemory({
                 needsBars: false, needsTechFactors: false,
-                needsStocks: true,
+                needsStocks: needStocks,
                 needsDailyBasic: needsDailyBasicForJS,
                 needsFinance: needsFinanceForJS,
                 needsDividends: false,
