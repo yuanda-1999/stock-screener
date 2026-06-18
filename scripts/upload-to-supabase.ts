@@ -1,7 +1,6 @@
-// 将本地 SQLite 数据上传到 Supabase
-// 用法:
-//   先配置 .env.local 中的 SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY
-//   再运行: bun run scripts/upload-to-supabase.ts
+// 将本地 SQLite 数据上传到 Supabase（并发优化版）
+// 用法: bun run scripts/upload-to-supabase.ts
+// 环境变量: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { Database } from "bun:sqlite";
 import { createClient } from "@supabase/supabase-js";
@@ -31,21 +30,54 @@ const TABLES = [
   "finance_cache",
 ];
 
+const BATCH = 2000;
+const MAX_CONCURRENT = 4;
+
 async function uploadTable(table: string) {
+  const start = Date.now();
   const rows = db.query(`SELECT * FROM ${table}`).all() as Record<string, unknown>[];
   if (rows.length === 0) { console.log(`  ${table}: 0 rows, skip`); return; }
 
-  // 去 updated_at 字段（Supabase 自动管理）
   const clean = rows.map(({ updated_at, ...rest }) => rest);
 
-  const BATCH = 500;
+  // 构建批次
+  const batches: Record<string, unknown>[][] = [];
   for (let i = 0; i < clean.length; i += BATCH) {
-    const batch = clean.slice(i, i + BATCH);
-    const { error } = await sb.from(table).upsert(batch as never);
-    if (error) { console.error(`  ${table} error:`, error); return; }
-    if (i % 5000 === 0) console.log(`  ${table}: ${Math.min(i + BATCH, clean.length)}/${clean.length}`);
+    batches.push(clean.slice(i, i + BATCH));
   }
-  console.log(`  ${table}: ${clean.length} rows ✓`);
+
+  let done = 0;
+
+  async function processBatch(batch: Record<string, unknown>[]) {
+    for (let retry = 0; retry < 3; retry++) {
+      const { error } = await sb.from(table).upsert(batch as never);
+      if (!error) break;
+      if (retry < 2) {
+        console.warn(`  ${table}: retry ${retry + 1}, ${error.message}`);
+        await new Promise(r => setTimeout(r, 2000 * (retry + 1)));
+        continue;
+      }
+      throw new Error(`${table}: ${error.message}`);
+    }
+    done += batch.length;
+    if (done % 100000 === 0 || done === clean.length) {
+      const elapsed = ((Date.now() - start) / 1000).toFixed(0);
+      console.log(`  ${table}: ${done}/${clean.length} (${elapsed}s)`);
+    }
+  }
+
+  // 并发池
+  const pool: Promise<void>[] = [];
+  for (const batch of batches) {
+    if (pool.length >= MAX_CONCURRENT) await Promise.race(pool);
+    const p = processBatch(batch).finally(() => {
+      pool.splice(pool.indexOf(p), 1);
+    });
+    pool.push(p);
+  }
+  await Promise.all(pool);
+  const elapsed = ((Date.now() - start) / 1000).toFixed(0);
+  console.log(`  ${table}: ${clean.length} rows ✓ (${elapsed}s)`);
 }
 
 async function main() {

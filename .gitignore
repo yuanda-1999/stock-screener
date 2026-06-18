@@ -44,3 +44,5 @@ next-env.d.ts
 data/tushare_cache.db
 data/tushare_cache.db-*
 data/json/
+
+.vercel

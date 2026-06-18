@@ -20,7 +20,7 @@ import {
   Search,
   Play,
   Square,
-  Zap,
+
   X,
   Filter,
 } from "lucide-react";
@@ -171,14 +171,6 @@ export default function Home() {
     start(filters);
   }, [filterState, start]);
 
-  // 预热缓存
-  const handlePrewarm = useCallback(() => {
-    const evtSource = new EventSource("/api/screening/prewarm");
-    evtSource.onmessage = () => {};
-    evtSource.onerror = () => evtSource.close();
-    setTimeout(() => evtSource.close(), 5000);
-  }, []);
-
   // 结果表格列
   const resultColumns = useMemo(() => {
     if (results.length === 0) return [];
@@ -245,15 +237,6 @@ export default function Home() {
               ) : null}
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handlePrewarm}
-            className="h-8 text-xs gap-1.5"
-          >
-            <Zap className="w-3.5 h-3.5" />
-            预热缓存
-          </Button>
           <Button
             variant={isScanning ? "destructive" : "default"}
             size="sm"
