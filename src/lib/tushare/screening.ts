@@ -183,11 +183,11 @@ function checkProfitGrowth(code: string, filter: { min?: number; max?: number })
 
 async function checkMACD(
   code: string,
-  filter: { years: number; thresholdPct: number }
+  filter: { months: number; thresholdPct: number }
 ): Promise<{ macd: number; macdMin: number; macdMax: number; pct: number } | null> {
   const now = new Date();
   const startDate = new Date(now);
-  startDate.setFullYear(startDate.getFullYear() - filter.years);
+  startDate.setMonth(startDate.getMonth() - filter.months);
   const startStr = startDate.toISOString().split("T")[0].replace(/-/g, "");
 
   let factors = getMACDFactors(code);
@@ -217,7 +217,7 @@ async function checkMACD(
 
   if (factors.length < 2) return null;
   factors.sort((a, b) => a.trade_date.localeCompare(b.trade_date));
-  const recent = factors.slice(-Math.min(factors.length, filter.years * 250));
+  const recent = factors.slice(-Math.min(factors.length, filter.months * 21));
   const curMACD = factors[factors.length - 1].macd;
   const macdMin = Math.min(...recent.map((f) => f.macd));
   const macdMax = Math.max(...recent.map((f) => f.macd));

@@ -131,7 +131,7 @@ function buildParams(params: URLSearchParams, filters: CombinedScreeningFilters)
   if (filters.profitGrowth) { params.set("enable_profitgrowth", "1"); setMinMax(params, "profitgrowth", filters.profitGrowth); }
 
   // 技术
-  if (filters.macd) { params.set("enable_macd", "1"); params.set("macd_years", String(filters.macd.years)); params.set("macd_threshold", String(filters.macd.thresholdPct)); }
+  if (filters.macd) { params.set("enable_macd", "1"); params.set("macd_months", String(filters.macd.months)); params.set("macd_threshold", String(filters.macd.thresholdPct)); }
   if (filters.kdj) { params.set("enable_kdj", "1"); params.set("kdj_method", filters.kdj.method); if (filters.kdj.kMax) params.set("kdj_kmax", String(filters.kdj.kMax)); if (filters.kdj.jMax) params.set("kdj_jmax", String(filters.kdj.jMax)); }
   if (filters.rsi) { params.set("enable_rsi", "1"); params.set("rsi_max", String(filters.rsi.max)); }
   if (filters.boll) { params.set("enable_boll", "1"); params.set("boll_method", filters.boll.method); }

@@ -68,7 +68,7 @@ const INDICATORS: IndicatorDef[] = [
   { id: "revenueGrowth", category: "基本面", label: "营收增长率", keywords: ["营收", "revenue", "yszzl"], type: "range", unit: "%", step: "0.1", defaults: { min: undefined, max: undefined } },
   { id: "profitGrowth", category: "基本面", label: "净利润增长率", keywords: ["利润", "profit", "jlrzzl"], type: "range", unit: "%", step: "0.1", defaults: { min: undefined, max: undefined } },
   // 技术
-  { id: "macd", category: "技术", label: "MACD低位", keywords: ["macd", "macd低位", "md"], type: "macd", unit: "%", step: "1", defaults: { years: 2, thresholdPct: 20 } },
+  { id: "macd", category: "技术", label: "MACD低位", keywords: ["macd", "macd低位", "md"], type: "macd", unit: "%", step: "1", defaults: { months: 6, thresholdPct: 20 } },
   { id: "kdj", category: "技术", label: "KDJ", keywords: ["kdj", "kd"], type: "kdj", defaults: { method: "超卖", kMax: undefined, jMax: undefined } },
   { id: "rsi", category: "技术", label: "RSI", keywords: ["rsi", "rs"], type: "single", step: "1", defaults: { max: 30 } },
   { id: "boll", category: "技术", label: "BOLL布林", keywords: ["布林", "boll", "bl"], type: "boll", defaults: { method: "下轨附近" } },
@@ -531,14 +531,14 @@ function MacdInputs({
 }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs text-muted-foreground">年数</span>
+      <span className="text-xs text-muted-foreground">月数</span>
       <Input
         type="number"
         step="1"
         min="1"
-        max="5"
-        value={values.years !== undefined ? String(values.years) : "2"}
-        onChange={(e) => onChange("years", parseInt(e.target.value) || 2)}
+        max="24"
+        value={values.months !== undefined ? String(values.months) : "6"}
+        onChange={(e) => onChange("months", parseInt(e.target.value) || 6)}
         className="h-7 text-xs w-16"
       />
       <span className="text-xs text-muted-foreground">分位≤{unit || "%"}</span>
