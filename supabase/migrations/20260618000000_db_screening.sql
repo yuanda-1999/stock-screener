@@ -94,6 +94,15 @@ AS $$
     LIMIT 1
   ) latest_div ON true
 
+  -- 最新筹码分布（用于筹码集中度）
+  LEFT JOIN LATERAL (
+    SELECT ((cost_95pct - cost_5pct) / NULLIF((cost_95pct + cost_5pct) / 2, 0)) * 100 AS concentration
+    FROM cyq_perf_cache
+    WHERE code = sb.code
+    ORDER BY trade_date DESC
+    LIMIT 1
+  ) chip ON true
+
   WHERE
     -- 价格
     (filters->'price' IS NULL OR (
@@ -194,5 +203,10 @@ AS $$
            OR (latest_div.cash_div / bars.close) * 100 >= (filters->'dividendYield'->>'min')::numeric)
       AND ((filters->'dividendYield'->>'max')::numeric IS NULL
            OR (latest_div.cash_div / bars.close) * 100 <= (filters->'dividendYield'->>'max')::numeric)
+    ))
+    -- 筹码集中度 = ((cost_95pct - cost_5pct) / avg_cost) * 100，≥ 阈值（保留筹码分散的股票）
+    AND (filters->'chip' IS NULL OR (
+      chip.concentration IS NOT NULL
+      AND chip.concentration >= (filters->'chip'->>'thresholdPct')::numeric
     ));
 $$;
