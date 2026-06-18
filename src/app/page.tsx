@@ -86,7 +86,7 @@ const INDICATORS: IndicatorDef[] = [
   { id: "gainers", category: "预过滤", label: "涨幅预过滤", keywords: ["预过滤", "gainer", "glv"], type: "gainers", unit: "%", step: "0.1", defaults: { thresholdPct: 5 } },
 ];
 
-const CATEGORIES = ["行情", "基本面", "技术", "分红", "筹码", "预过滤"];
+const CATEGORIES = ["板块", "行情", "基本面", "技术", "分红", "筹码", "预过滤"];
 
 // ==================== 工具函数 ====================
 
