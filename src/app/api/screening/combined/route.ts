@@ -186,7 +186,6 @@ export async function GET(req: NextRequest) {
           // DB 筛选无结果，直接返回
           send({ type: "progress", done: 0, total: 0 });
           send({ type: "done" });
-          controller.close();
           return;
         } else {
           // 回退：全量加载
