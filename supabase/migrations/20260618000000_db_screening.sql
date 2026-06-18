@@ -42,7 +42,9 @@ DECLARE
   need_wr boolean;
   need_bias boolean;
   need_macd boolean;
+  need_industry boolean;
   where_clauses text[];
+  industry_list text;
 BEGIN
   -- 判断哪些 JOIN 需要执行
   need_bars := filters->'price' IS NOT NULL OR filters->'changeRate' IS NOT NULL
@@ -65,6 +67,14 @@ BEGIN
   need_wr := filters->'wr' IS NOT NULL;
   need_bias := filters->'bias' IS NOT NULL;
   need_macd := filters->'macd' IS NOT NULL;
+
+  -- 行业筛选：提前提取数组值，避免动态 SQL 中引用 filters 参数
+  need_industry := filters->'industries' IS NOT NULL;
+  IF need_industry THEN
+    SELECT string_agg('''' || replace(value, '''', '''''') || '''', ',')
+    FROM jsonb_array_elements_text(filters->'industries') AS value
+    INTO industry_list;
+  END IF;
 
   -- 基础 SELECT（始终需要 stock_basic_cache）
   sql_query := 'SELECT sb.code, sb.name, ';
@@ -197,9 +207,9 @@ BEGIN
   where_clauses := ARRAY[]::text[];
 
   -- 行业/版块
-  IF filters->'industries' IS NOT NULL THEN
+  IF need_industry THEN
     where_clauses := array_append(where_clauses, 'sb.industry IS NOT NULL');
-    where_clauses := array_append(where_clauses, 'sb.industry IN (SELECT jsonb_array_elements_text(filters->''industries''))');
+    where_clauses := array_append(where_clauses, 'sb.industry IN (' || industry_list || ')');
   END IF;
 
   -- 价格
