@@ -13,36 +13,42 @@
 - GitHub: https://github.com/yuanda-1999/stock-screener
 - Supabase: https://supabase.com/dashboard/project/cmaakeewurufvziqwagb
 
-## 已完成 (7/7 Phase + 2 优化)
+## 已完成 (7/7 Phase + DB 化 + 数据优化 + 功能增强)
 
 - **Phase 1: 脚手架** — Next.js 16 + shadcn/ui + Tailwind CSS v4 亮色主题
 - **Phase 2: 数据层** — 内存 Map + JSON 双模式，env 驱动二选一
 - **Phase 3: Tushare 筛选逻辑** — 25 个指标 check 函数 + SSE 流式生成器
 - **Phase 4: 数据采集** — daily_basic 5208只 + finance 16587行 (2023-2025)
-- **Phase 5: API 路由** — /api/screening/combined + /api/screening/prewarm
+- **Phase 5: API 路由** — /api/screening/combined (+ prewarm 已移除)
 - **Phase 6: 前端页面** — 搜索栏 + 折叠筛选面板 + SSE 结果表格
 - **Phase 7: 部署配置** — Vercel + Supabase Pro (1012万行) + 自定义域名
 - **筛选 DB 化** — PostgreSQL `screen_stocks_basic` 函数: 15 个简单指标 DB 层过滤，候选集缩减 90%+
 - **增量更新** — Vercel Cron 每日 18:00 批量拉取 Tushare 数据 → Supabase
+- **筹码集中度修复** — 公式改为东方财富版 `(P95-P5)/(P95+P5)*100`，范围 0-100%
+- **MACD 周线化** — 从日线改为周线，UI 显示"周数"默认 26 周
+- **行业/版块筛选** — 110 个 Tushare 行业分类，多选搜索，DB + JS 双层过滤
 
 ## 筛选架构 (2026-06-18 更新)
 
 ```
 前端 (page.tsx) → /api/screening/combined
   ├── 第一层 (DB): screen_stocks_basic(JSONB) → PostgreSQL LATERAL JOIN + WHERE
-  │   └── 过滤 15 个简单指标，返回 200-500 候选股
+  │   └── 过滤 15 个简单指标 + 行业，返回 200-500 候选股
   └── 第二层 (JS): tushareCombinedScreening → 仅对候选股检查技术指标
       └── 按需加载候选股 bar 数据 (loadCandidatesToMemory)
 ```
 
-## 线上调试 (2026-06-17)
+## 线上调试记录 (2026-06-17 ~ 2026-06-18)
 
 - Vercel 环境变量补全 (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TUSHARE_TOKEN)
-- Supabase 大表创建索引 (daily_bar_cache, monthly_bar_cache, weekly_bar_cache, macd_factor_cache, cyq_perf_cache, daily_basic_cache, finance_cache, dividend_cache)
+- Supabase 大表创建索引
 - 数据加载优化: 按需加载 (不用日线就不加载), orderBy + limit 控制数量
 - SSE 流式响应: 加载阶段立即发送 loading 事件防止前端卡住
-- 筹码集中度: 筛选逻辑改为 ≥ (保留筹码分散的股票)
-- 顶部栏: 开始筛选按钮旁增加进度显示
+- 筹码集中度: 公式从通达信版修正为东方财富版
+- MACD: 年→月→周，直接体现周线周期
+- DB 函数: 行业筛选改用预提取值，规避动态 SQL 中 filters 参数不可用
+- 前端: "板块"分类加入 CATEGORIES 数组（修复行业筛选不显示 bug）
+- 移除无用的预热缓存按钮和 API 路由
 
 ## 已知限制
 

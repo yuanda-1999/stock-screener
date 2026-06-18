@@ -8,12 +8,13 @@ _无_
 
 ## Completed Recently
 
-- 筛选移到数据库层: 创建 PostgreSQL `screen_stocks_basic` 函数，15 个简单指标（PE/PB/ROE/市值/换手率等）在 DB 层用 LATERAL JOIN + WHERE 过滤，候选集从 5200 缩减到 200-500
-- API 路由改造: combined/route.ts 两层筛选 — DB 过滤 → 候选股按需加载 bar 数据 → JS 技术指标检查
-- cache 层: 新增 `loadCandidatesToMemory` 按代码列表加载 + `loadForCodes` Supabase IN 查询
-- 增量更新: Vercel Cron 端点 `/api/cron/daily-refresh` — 每日 18:00 从 Tushare 批量拉取 + Upsert Supabase
-- vercel.json: 配置 Cron schedule `0 10 * * 1-5` (10:00 UTC)
-- Supabase 迁移: `20260618000000_db_screening.sql` (筛选函数), `20260618000001_indicator_cache.sql` (技术指标缓存表预留)
+- 筹码集中度修复: 公式从通达信版改为东方财富版 `(P95-P5)/(P95+P5)*100`，范围 0-100%
+- MACD 周线化: 从日线改为周线，EMA12/EMA26 基于周收盘价，UI 显示"周数"默认 26
+- TypeScript 编译修复: weekly bars fallback 缺少 code 字段
+- 行业/版块筛选: 110 个 Tushare 行业分类 — 前端多选搜索 + DB 层预过滤 + JS 层二次过滤
+- DB 函数修复: 行业筛选改用预提取值，避免动态 SQL 中 filters 参数不可用
+- 前端修复: "板块"分类加入 CATEGORIES 数组，修复行业筛选不显示 bug
+- 移除预热缓存: 删除无用按钮和 `/api/screening/prewarm` 路由
 
 ## Completed
 
@@ -27,26 +28,9 @@ _无_
 - 线上调试: Vercel 环境变量补全 + Supabase 索引 + 按需加载 + SSE 优化 + 进度条
 - 筛选 DB 化: PostgreSQL 筛选函数 + 两层筛选 + 候选股按需加载
 - 增量更新: Vercel Cron 每日批量拉取 + 写入 Supabase
-
-## Completed Recently
-
-- 技术指标 DB 化: KDJ/RSI/BOLL/WR/BIAS 预计算缓存表 + `screen_stocks_basic` 新增 LATERAL JOIN + WHERE 条件，全部 20 个指标可 DB 层筛选
-- MACD 预过滤: 确保 MACD 数据存在的股票才进入候选集，百分位计算仍由 JS 完成
-- 指标重算模块: `src/lib/screening/indicator-recompute.ts` 共享模块，cron 端点每日自动调用
-- Cron 端点更新: 每日数据刷新后自动重算技术指标
-
-## Completed
-
-- Phase 1: 脚手架 — Next.js 16 + shadcn/ui + Tailwind v4 + Fira 字体
-- Phase 2: 数据层 — 内存 Map + JSON 双模式缓存
-- Phase 3: Tushare 筛选逻辑 — 25 指标 check + SSE 生成器
-- Phase 4: 数据采集 — daily_basic 5208只 + finance 16587行 (2023-2025)
-- Phase 5: API 路由 — combined + prewarm SSE endpoints
-- Phase 6: 前端页面 — 搜索 + 折叠面板 + 动态结果表格
-- Phase 7: 线上部署 — Supabase Pro 建表 + 1012万行数据上传 + Vercel + xuangubao.top
-- 线上调试: Vercel 环境变量补全 + Supabase 索引 + 按需加载 + SSE 优化 + 进度条
-- 筛选 DB 化: PostgreSQL 筛选函数 + 两层筛选 + 候选股按需加载
-- 增量更新: Vercel Cron 每日批量拉取 + 写入 Supabase
+- 技术指标 DB 化: KDJ/RSI/BOLL/WR/BIAS 预计算缓存表 + screen_stocks_basic LATERAL JOIN
+- MACD 预过滤: 确保 MACD 数据存在的股票才进入候选集
+- 指标重算模块: `src/lib/screening/indicator-recompute.ts` 共享模块，cron 端点每日调用
 
 ## Next
 
