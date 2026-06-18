@@ -4,6 +4,7 @@
 import { loadAll, insertMany, saveDbToDisk } from "./local-sqlite";
 import {
   loadStockNames,
+  loadStockIndustries,
   loadDailyBars as loadDailyBarsMem,
   loadMonthlyBars,
   loadWeeklyBars,
@@ -213,6 +214,11 @@ export async function loadAllToMemory(options: LoadOptions = {}) {
     if (needsStocks) {
       if (!stocks.length) throw new Error("stock_basic_cache is empty — check Supabase connection");
       loadStockNames(new Map((stocks as Record<string, unknown>[]).map((s) => [s.code as string, s.name as string])));
+      loadStockIndustries(new Map(
+        (stocks as Record<string, unknown>[])
+          .filter((s) => s.industry)
+          .map((s) => [s.code as string, s.industry as string])
+      ));
     } else {
       // 兜底：确保 loadStockNames 在内存中有数据（DB 筛选模式不需要重新加载）
     }
@@ -276,6 +282,7 @@ export async function loadAllToMemory(options: LoadOptions = {}) {
     ]);
 
     loadStockNames(new Map(stocks.map((s) => [s.code, s.name])));
+    loadStockIndustries(new Map(stocks.filter((s) => s.industry).map((s) => [s.code, s.industry!])));
     loadDividends(divid);
     loadMonthlyBars(monthly);
     loadWeeklyBars(weekly);

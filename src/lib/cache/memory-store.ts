@@ -15,9 +15,14 @@ import type {
 
 // === 股票名单 ===
 let _stockNames = new Map<string, string>();
+let _stockIndustries = new Map<string, string>();
 
 export function getStockNames(): Map<string, string> {
   return _stockNames;
+}
+
+export function getStockIndustries(): Map<string, string> {
+  return _stockIndustries;
 }
 
 export function setStockNames(map: Map<string, string>) {
@@ -28,8 +33,16 @@ export function loadStockNames(map: Map<string, string>) {
   _stockNames = map;
 }
 
+export function loadStockIndustries(map: Map<string, string>) {
+  _stockIndustries = map;
+}
+
 export function getStockName(code: string): string | undefined {
   return _stockNames.get(code);
+}
+
+export function getStockIndustry(code: string): string | undefined {
+  return _stockIndustries.get(code);
 }
 
 // === 日线 K 线 ===

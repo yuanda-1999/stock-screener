@@ -5,6 +5,7 @@ import { tushareCall } from "./client";
 import { calcMACD, calcKDJ, calcRSI, calcBOLL, calcWR, calcBIAS, calcCR, calcEMA } from "./indicators";
 import {
   getStockNames,
+  getStockIndustry,
   getDailyBars,
   getMonthlyBars,
   getWeeklyBars,
@@ -495,6 +496,14 @@ export async function* tushareCombinedScreening(
   let codes = [...names.keys()];
   if (limitCodes?.length) {
     codes = codes.filter((c) => limitCodes.includes(c));
+  }
+  // 行业筛选
+  if (filters.industries?.length) {
+    const industrySet = new Set(filters.industries);
+    codes = codes.filter((c) => {
+      const ind = getStockIndustry(c);
+      return ind && industrySet.has(ind);
+    });
   }
   if (!codes.length) {
     yield { type: "done" };

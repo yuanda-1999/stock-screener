@@ -105,6 +105,12 @@ export async function GET(req: NextRequest) {
     filters.gainers = { thresholdPct: parseFloat(params.get("gain_threshold") || "5") };
   }
 
+  // 行业/版块筛选
+  const industriesParam = params.get("industries");
+  if (industriesParam) {
+    filters.industries = industriesParam.split(",").filter(Boolean);
+  }
+
   // 限定代码范围
   const codesParam = params.get("codes");
   const limitCodes = codesParam ? codesParam.split(",") : undefined;

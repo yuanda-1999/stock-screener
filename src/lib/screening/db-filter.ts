@@ -58,12 +58,14 @@ function filtersToJsonb(filters: CombinedScreeningFilters): Record<string, unkno
   if (filters.boll) obj.boll = filters.boll;
   if (filters.wr) obj.wr = filters.wr;
   if (filters.bias) obj.bias = filters.bias;
+  if (filters.industries && filters.industries.length > 0) obj.industries = filters.industries;
   return obj;
 }
 
 // 判断是否有任何 DB 层能处理的筛选条件
 export function hasBasicFilters(filters: CombinedScreeningFilters): boolean {
-  return !!(filters.price || filters.changeRate || filters.turnover ||
+  return !!(filters.industries?.length ||
+    filters.price || filters.changeRate || filters.turnover ||
     filters.volumeRatio || filters.totalMv || filters.circMv ||
     filters.amplitude || filters.pe || filters.pb || filters.roe ||
     filters.eps || filters.grossMargin || filters.netMargin ||

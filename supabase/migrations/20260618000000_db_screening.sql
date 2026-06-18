@@ -196,6 +196,12 @@ BEGIN
   -- WHERE 子句
   where_clauses := ARRAY[]::text[];
 
+  -- 行业/版块
+  IF filters->'industries' IS NOT NULL THEN
+    where_clauses := array_append(where_clauses, 'sb.industry IS NOT NULL');
+    where_clauses := array_append(where_clauses, 'sb.industry IN (SELECT jsonb_array_elements_text(filters->''industries''))');
+  END IF;
+
   -- 价格
   IF filters->'price' IS NOT NULL THEN
     where_clauses := array_append(where_clauses, 'bars.close IS NOT NULL');

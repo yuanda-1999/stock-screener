@@ -35,7 +35,8 @@ type IndicatorType =
   | "boll"
   | "dividend"
   | "chip"
-  | "gainers";
+  | "gainers"
+  | "industries";
 
 interface IndicatorDef {
   id: string;
@@ -49,6 +50,8 @@ interface IndicatorDef {
 }
 
 const INDICATORS: IndicatorDef[] = [
+  // 行业/版块
+  { id: "industries", category: "板块", label: "行业板块", keywords: ["行业", "板块", "industry", "sector", "hy"], type: "industries", defaults: { industries: [] as string[] } },
   // 行情
   { id: "price", category: "行情", label: "最新价", keywords: ["价格", "price", "jg"], type: "range", unit: "元", step: "0.01", defaults: { min: undefined, max: undefined } },
   { id: "changeRate", category: "行情", label: "涨跌幅", keywords: ["涨幅", "change", "zdf"], type: "range", unit: "%", step: "0.1", defaults: { min: undefined, max: undefined } },
@@ -90,7 +93,15 @@ const CATEGORIES = ["行情", "基本面", "技术", "分红", "筹码", "预过
 function buildFilters(state: Record<string, unknown>): CombinedScreeningFilters {
   const filters: CombinedScreeningFilters = {};
   for (const [key, value] of Object.entries(state)) {
-    (filters as Record<string, unknown>)[key] = value;
+    if (key === "industries") {
+      // filterState.industries = { industries: [...] } → extract array
+      const inner = (value as Record<string, unknown>).industries;
+      if (Array.isArray(inner) && inner.length > 0) {
+        filters.industries = inner as string[];
+      }
+    } else {
+      (filters as Record<string, unknown>)[key] = value;
+    }
   }
   return filters;
 }
@@ -452,6 +463,9 @@ function FilterCard({
           {indicator.type === "gainers" && (
             <GainersInputs id={id} values={values} unit={indicator.unit} onChange={onChange} />
           )}
+          {indicator.type === "industries" && (
+            <IndustriesInput id={id} values={values} onChange={onChange} />
+          )}
         </div>
       )}
     </Card>
@@ -720,6 +734,93 @@ function GainersInputs({
         onChange={(e) => onChange("thresholdPct", parseFloat(e.target.value) || 5)}
         className="h-7 text-xs w-20"
       />
+    </div>
+  );
+}
+
+const INDUSTRY_LIST = [
+  "IT设备", "专用机械", "中成药", "乳制品", "互联网", "仓储物流", "供气供热", "保险",
+  "元器件", "全国地产", "公共交通", "公路", "其他商业", "其他建材", "农业综合", "农用机械",
+  "农药化肥", "出版业", "化学制药", "化工原料", "化工机械", "化纤", "区域地产", "医疗保健",
+  "医药商业", "半导体", "商品城", "商贸代理", "啤酒", "园区开发", "塑料", "多元金融",
+  "家居用品", "家用电器", "小金属", "工程机械", "广告包装", "建筑工程", "影视音像", "房产服务",
+  "批发业", "摩托车", "文教休闲", "新型电力", "旅游景点", "旅游服务", "日用化工", "普钢",
+  "服饰", "机场", "机床制造", "机械基件", "林业", "染料涂料", "橡胶", "水力发电",
+  "水务", "水泥", "水运", "汽车整车", "汽车服务", "汽车配件", "渔业", "港口",
+  "火力发电", "焦炭加工", "煤炭开采", "特种钢", "环境保护", "玻璃", "生物制药", "电信运营",
+  "电器仪表", "电器连锁", "电气设备", "白酒", "百货", "石油加工", "石油开采", "石油贸易",
+  "矿物制品", "种植业", "空运", "红黄酒", "纺织", "纺织机械", "综合类", "航空",
+  "船舶", "装修装饰", "证券", "超市连锁", "路桥", "软件服务", "软饮料", "轻工机械",
+  "运输设备", "通信设备", "造纸", "酒店餐饮", "钢加工", "铁路", "铅锌", "铜",
+  "铝", "银行", "陶瓷", "食品", "饲料", "黄金"
+];
+
+function IndustriesInput({
+  id,
+  values,
+  onChange,
+}: {
+  id: string;
+  values: Record<string, unknown>;
+  onChange: (key: string, value: unknown) => void;
+}) {
+  const selected: string[] = (values.industries as string[]) || [];
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search) return INDUSTRY_LIST;
+    const q = search.toLowerCase();
+    return INDUSTRY_LIST.filter((ind) => ind.toLowerCase().includes(q));
+  }, [search]);
+
+  const toggle = useCallback(
+    (industry: string) => {
+      const next = selected.includes(industry)
+        ? selected.filter((s) => s !== industry)
+        : [...selected, industry];
+      onChange("industries", next);
+    },
+    [selected, onChange]
+  );
+
+  return (
+    <div className="space-y-1.5">
+      <Input
+        placeholder="搜索行业..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="h-7 text-xs"
+      />
+      <div className="max-h-40 overflow-y-auto border rounded p-1.5 grid grid-cols-3 gap-0.5">
+        {filtered.map((ind) => (
+          <label
+            key={ind}
+            className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-accent cursor-pointer text-xs"
+          >
+            <Checkbox
+              id={`${id}-${ind}`}
+              checked={selected.includes(ind)}
+              onCheckedChange={() => toggle(ind)}
+              className="h-3.5 w-3.5"
+            />
+            <span className="truncate">{ind}</span>
+          </label>
+        ))}
+        {filtered.length === 0 && (
+          <div className="col-span-3 text-xs text-muted-foreground py-2 text-center">无匹配行业</div>
+        )}
+      </div>
+      {selected.length > 0 && (
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-xs text-muted-foreground">已选 {selected.length}:</span>
+          {selected.map((ind) => (
+            <Badge key={ind} variant="secondary" className="text-xs py-0 px-1.5 gap-0.5">
+              {ind}
+              <X className="h-3 w-3 cursor-pointer" onClick={() => toggle(ind)} />
+            </Badge>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 export interface StockBasic {
   code: string;
   name: string;
+  industry?: string;
 }
 
 export interface DailyBar {
@@ -127,6 +128,8 @@ export interface BOLLFilter {
 }
 
 export interface CombinedScreeningFilters {
+  // 版块
+  industries?: string[];
   // 行情
   price?: PriceFilter;
   changeRate?: RangeFilter;

@@ -145,6 +145,9 @@ function buildParams(params: URLSearchParams, filters: CombinedScreeningFilters)
   // 筹码
   if (filters.chip) { params.set("enable_chip", "1"); params.set("chip_weeks", String(filters.chip.weeks)); params.set("chip_threshold", String(filters.chip.thresholdPct)); }
 
+  // 行业
+  if (filters.industries?.length) { params.set("industries", filters.industries.join(",")); }
+
   // 涨幅预过滤
   if (filters.gainers) { params.set("enable_gainers", "1"); params.set("gain_threshold", String(filters.gainers.thresholdPct)); }
 }
