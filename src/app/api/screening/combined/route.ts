@@ -1,7 +1,9 @@
 // SSE 组合筛选 API
+// 两层筛选：DB 过滤简单指标 → JS 检查技术指标
 import { NextRequest } from "next/server";
-import { loadAllToMemory } from "@/lib/cache/index";
+import { loadAllToMemory, loadCandidatesToMemory } from "@/lib/cache/index";
 import { tushareCombinedScreening } from "@/lib/tushare/screening";
+import { screenStocksBasic, hasBasicFilters, onlyTechnicalFilters } from "@/lib/screening/db-filter";
 import type { CombinedScreeningFilters } from "@/lib/types";
 
 let _loadedBars = false;
@@ -37,21 +39,11 @@ export async function GET(req: NextRequest) {
     const max = parseFloat(params.get("change_max") || "0");
     filters.changeRate = { min, max };
   }
-  if (params.get("enable_turnover") === "1") {
-    filters.turnover = parseRange(params, "turnover_");
-  }
-  if (params.get("enable_volratio") === "1") {
-    filters.volumeRatio = parseRange(params, "volratio_");
-  }
-  if (params.get("enable_totalmv") === "1") {
-    filters.totalMv = parseRange(params, "totalmv_");
-  }
-  if (params.get("enable_circmv") === "1") {
-    filters.circMv = parseRange(params, "circmv_");
-  }
-  if (params.get("enable_amplitude") === "1") {
-    filters.amplitude = parseRange(params, "amplitude_");
-  }
+  if (params.get("enable_turnover") === "1") filters.turnover = parseRange(params, "turnover_");
+  if (params.get("enable_volratio") === "1") filters.volumeRatio = parseRange(params, "volratio_");
+  if (params.get("enable_totalmv") === "1") filters.totalMv = parseRange(params, "totalmv_");
+  if (params.get("enable_circmv") === "1") filters.circMv = parseRange(params, "circmv_");
+  if (params.get("enable_amplitude") === "1") filters.amplitude = parseRange(params, "amplitude_");
 
   // === 基本面 ===
   if (params.get("enable_pe") === "1") filters.pe = parseRange(params, "pe_");
@@ -95,9 +87,7 @@ export async function GET(req: NextRequest) {
       year: params.get("year") || "2025",
     };
   }
-  if (params.get("enable_divyield") === "1") {
-    filters.dividendYield = parseRange(params, "divyield_");
-  }
+  if (params.get("enable_divyield") === "1") filters.dividendYield = parseRange(params, "divyield_");
 
   // === 筹码 ===
   if (params.get("enable_chip") === "1") {
@@ -112,11 +102,11 @@ export async function GET(req: NextRequest) {
     filters.gainers = { thresholdPct: parseFloat(params.get("gain_threshold") || "5") };
   }
 
-  // 限定代码范围（在结果中筛选）
+  // 限定代码范围
   const codesParam = params.get("codes");
   const limitCodes = codesParam ? codesParam.split(",") : undefined;
 
-  // 按需加载
+  // 按需加载判断
   const wantBars = needsBars(filters);
   const wantTechFactors = needsTechFactors(filters);
   const wantDividends = needsDividends(filters);
@@ -129,16 +119,63 @@ export async function GET(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       };
       try {
-        send({ type: "loading", message: "正在加载数据..." });
-        await loadAllToMemory({
-          needsBars: wantBars && !_loadedBars,
-          needsTechFactors: wantTechFactors && !_loadedTechFactors,
-          needsDividends: wantDividends && !_loadedDividends,
-        });
-        if (wantBars) _loadedBars = true;
-        if (wantTechFactors) _loadedTechFactors = true;
-        if (wantDividends) _loadedDividends = true;
-        for await (const event of tushareCombinedScreening(filters, limitCodes)) {
+        // 第一步：尝试 DB 层筛选
+        let candidateCodes: string[] | undefined = limitCodes;
+        const useDBScreening = !limitCodes && hasBasicFilters(filters);
+
+        if (useDBScreening) {
+          send({ type: "loading", message: "正在数据库筛选..." });
+          try {
+            const { codes } = await screenStocksBasic(filters);
+            candidateCodes = codes;
+            send({ type: "loading", message: `数据库筛选完成: ${codes.length} 只候选股` });
+          } catch (e) {
+            console.error("[screening] DB screening failed, falling back to full scan:", (e as Error).message);
+            candidateCodes = undefined;
+          }
+        }
+
+        // 第二步：加载数据到内存
+        if (candidateCodes && candidateCodes.length > 0) {
+          // 核心表全量加载（数据量小）
+          if (!_loadedBars && !_loadedTechFactors && !_loadedDividends) {
+            send({ type: "loading", message: `正在加载核心数据...` });
+            await loadAllToMemory({
+              needsBars: false,
+              needsTechFactors: false,
+              needsDividends: wantDividends && !_loadedDividends,
+            });
+            if (wantDividends) _loadedDividends = true;
+          }
+
+          // 候选股的 bar/技术因子按需加载
+          if ((wantBars && !_loadedBars) || (wantTechFactors && !_loadedTechFactors)) {
+            send({ type: "loading", message: `正在加载 ${candidateCodes.length} 只候选股日线数据...` });
+            await loadCandidatesToMemory(candidateCodes);
+            if (wantBars) _loadedBars = true;
+            if (wantTechFactors) _loadedTechFactors = true;
+          }
+        } else if (candidateCodes && candidateCodes.length === 0) {
+          // DB 筛选无结果，直接返回
+          send({ type: "progress", done: 0, total: 0 });
+          send({ type: "done" });
+          controller.close();
+          return;
+        } else {
+          // 回退：全量加载
+          send({ type: "loading", message: "正在加载全量数据..." });
+          await loadAllToMemory({
+            needsBars: wantBars && !_loadedBars,
+            needsTechFactors: wantTechFactors && !_loadedTechFactors,
+            needsDividends: wantDividends && !_loadedDividends,
+          });
+          if (wantBars) _loadedBars = true;
+          if (wantTechFactors) _loadedTechFactors = true;
+          if (wantDividends) _loadedDividends = true;
+        }
+
+        // 第三步：JS 层筛选（全量或候选集）
+        for await (const event of tushareCombinedScreening(filters, candidateCodes)) {
           send(event);
           if (event.type === "done") break;
         }

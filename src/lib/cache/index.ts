@@ -68,6 +68,38 @@ export interface LoadOptions {
   needsDividends?: boolean;   // 是否需要分红数据
 }
 
+// 按候选股代码按需加载 bar 和技术因子数据（跳过核心表）
+export async function loadCandidatesToMemory(codes: string[]) {
+  if (USE_SUPABASE) {
+    const { loadForCodes } = await import("./supabase");
+
+    const safe = async <T>(label: string, fn: () => Promise<T[]>): Promise<T[]> => {
+      try {
+        return await fn();
+      } catch (e) {
+        console.error(`[cache] ${label} load failed:`, (e as Error).message);
+        return [];
+      }
+    };
+
+    const [daily, monthly, weekly, macd, cyq] = await Promise.all([
+      safe("daily_bar", () => loadForCodes("daily_bar_cache", codes, "*", { orderBy: "trade_date" })),
+      safe("monthly_bar", () => loadForCodes("monthly_bar_cache", codes, "*", { orderBy: "trade_date" })),
+      safe("weekly_bar", () => loadForCodes("weekly_bar_cache", codes, "*", { orderBy: "trade_date" })),
+      safe("macd_factor", () => loadForCodes("macd_factor_cache", codes, "*", { orderBy: "trade_date" })),
+      safe("cyq_perf", () => loadForCodes("cyq_perf_cache", codes, "*", { orderBy: "trade_date" })),
+    ]);
+
+    if (daily.length) loadDailyBarsMem(daily as unknown as DailyBar[]);
+    if (monthly.length) loadMonthlyBars(monthly as unknown as MonthlyBar[]);
+    if (weekly.length) loadWeeklyBars(weekly as unknown as WeeklyBar[]);
+    if (macd.length) loadMACDFactors(macd as unknown as MACDFactor[]);
+    if (cyq.length) loadCyqPerf(cyq as unknown as CyqPerf[]);
+
+    console.log(`[cache] Candidates: ${codes.length} codes → ${daily.length} daily, ${macd.length} macd, ${cyq.length} cyq`);
+  }
+}
+
 export async function loadAllToMemory(options: LoadOptions = {}) {
   if (USE_SUPABASE) {
     const { loadAllFromSupabase } = await import("./supabase");

@@ -38,6 +38,37 @@ export async function loadAllFromSupabase(table: string, columns = "*", options?
   return all;
 }
 
+// 按代码列表加载（用于候选股按需加载）
+export async function loadForCodes(
+  table: string,
+  codes: string[],
+  columns = "*",
+  options?: LoadOptions
+) {
+  if (codes.length === 0) return [];
+  const sb = getSupabase();
+  const all: Record<string, unknown>[] = [];
+  const CHUNK = 200; // IN 子句分批，避免 URL 过长
+  const PAGE = 1000;
+
+  for (let c = 0; c < codes.length; c += CHUNK) {
+    const chunk = codes.slice(c, c + CHUNK);
+    for (let page = 0; page < 500; page++) {
+      let query = sb.from(table).select(columns).in("code", chunk);
+      if (options?.orderBy) {
+        query = query.order(options.orderBy, { ascending: options.ascending ?? false });
+      }
+      query = query.range(page * PAGE, page * PAGE + PAGE - 1);
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all.push(...(data as unknown as Record<string, unknown>[]));
+      if (data.length < PAGE) break;
+    }
+  }
+  return all;
+}
+
 export async function upsertToSupabase(table: string, rows: Record<string, unknown>[]) {
   if (rows.length === 0) return;
   const sb = getSupabase();

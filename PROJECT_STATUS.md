@@ -1,10 +1,10 @@
 # Project Status: A 股指标筛选平台
 
-> 最后更新: 2026-06-17
+> 最后更新: 2026-06-18
 
 ## 当前状态
 
-已上线，生产环境运行中。筛选功能经过线上调试已基本可用。
+已上线，生产环境运行中。筛选已优化为 DB 层 + JS 层混合架构。
 
 ## 生产地址
 
@@ -13,7 +13,7 @@
 - GitHub: https://github.com/yuanda-1999/stock-screener
 - Supabase: https://supabase.com/dashboard/project/cmaakeewurufvziqwagb
 
-## 已完成 (7/7 Phase)
+## 已完成 (7/7 Phase + 2 优化)
 
 - **Phase 1: 脚手架** — Next.js 16 + shadcn/ui + Tailwind CSS v4 亮色主题
 - **Phase 2: 数据层** — 内存 Map + JSON 双模式，env 驱动二选一
@@ -22,6 +22,18 @@
 - **Phase 5: API 路由** — /api/screening/combined + /api/screening/prewarm
 - **Phase 6: 前端页面** — 搜索栏 + 折叠筛选面板 + SSE 结果表格
 - **Phase 7: 部署配置** — Vercel + Supabase Pro (1012万行) + 自定义域名
+- **筛选 DB 化** — PostgreSQL `screen_stocks_basic` 函数: 15 个简单指标 DB 层过滤，候选集缩减 90%+
+- **增量更新** — Vercel Cron 每日 18:00 批量拉取 Tushare 数据 → Supabase
+
+## 筛选架构 (2026-06-18 更新)
+
+```
+前端 (page.tsx) → /api/screening/combined
+  ├── 第一层 (DB): screen_stocks_basic(JSONB) → PostgreSQL LATERAL JOIN + WHERE
+  │   └── 过滤 15 个简单指标，返回 200-500 候选股
+  └── 第二层 (JS): tushareCombinedScreening → 仅对候选股检查技术指标
+      └── 按需加载候选股 bar 数据 (loadCandidatesToMemory)
+```
 
 ## 线上调试 (2026-06-17)
 
@@ -37,6 +49,20 @@
 - Vercel 函数超时 300s，Supabase REST API 分页加载有延迟
 - 本地 SQLite (<1s) vs 线上 Supabase (取决于数据量) 速度差异大
 - 技术指标 (KDJ/MACD) 筛选用时长于基本面指标 (PE/PB)
+- DB 筛选函数需在 Supabase SQL Editor 中手动执行迁移
+
+## 部署前检查
+
+```bash
+# 1. 在 Supabase Dashboard SQL Editor 执行:
+#    supabase/migrations/20260618000000_db_screening.sql
+
+# 2. 在 Vercel Dashboard 设置环境变量:
+#    CRON_SECRET=<随机字符串>
+
+# 3. 部署:
+git push origin master
+```
 
 ## 本地测试
 
