@@ -77,7 +77,16 @@ export async function upsertToSupabase(table: string, rows: Record<string, unkno
   const BATCH = 500;
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
-    const { error } = await sb.from(table).upsert(batch as never);
-    if (error) console.error(`Supabase upsert ${table} error:`, error);
+    let lastError: string | undefined;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { error } = await sb.from(table).upsert(batch as never);
+      if (!error) {
+        lastError = undefined;
+        break;
+      }
+      lastError = error.message;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+    }
+    if (lastError) throw new Error(`Supabase upsert ${table} error: ${lastError}`);
   }
 }

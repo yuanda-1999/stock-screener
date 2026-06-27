@@ -23,7 +23,7 @@ export interface MonthlyBar {
   close: number;
 }
 
-export interface WeeklyBar extends MonthlyBar {}
+export type WeeklyBar = MonthlyBar;
 
 export interface DividendRecord {
   code: string;

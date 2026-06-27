@@ -46,7 +46,7 @@ export function getStockIndustry(code: string): string | undefined {
 }
 
 // === 日线 K 线 ===
-let _dailyBars = new Map<string, DailyBar[]>();
+const _dailyBars = new Map<string, DailyBar[]>();
 
 export function getDailyBars(code: string): DailyBar[] | undefined {
   return _dailyBars.get(code);
@@ -66,7 +66,7 @@ export function loadDailyBars(rows: DailyBar[]) {
 }
 
 // === 月线 K 线 ===
-let _monthlyBars = new Map<string, MonthlyBar[]>();
+const _monthlyBars = new Map<string, MonthlyBar[]>();
 
 export function getMonthlyBars(code: string): MonthlyBar[] | undefined {
   return _monthlyBars.get(code);
@@ -85,7 +85,7 @@ export function loadMonthlyBars(rows: MonthlyBar[]) {
 }
 
 // === 周线 K 线 ===
-let _weeklyBars = new Map<string, WeeklyBar[]>();
+const _weeklyBars = new Map<string, WeeklyBar[]>();
 
 export function getWeeklyBars(code: string): WeeklyBar[] | undefined {
   return _weeklyBars.get(code);
@@ -104,7 +104,7 @@ export function loadWeeklyBars(rows: WeeklyBar[]) {
 }
 
 // === 分红 ===
-let _dividends = new Map<string, Map<string, DividendRecord>>();
+const _dividends = new Map<string, Map<string, DividendRecord>>();
 let _dividendsLoaded = false;
 
 export function hasDividendsLoaded(): boolean {
@@ -138,7 +138,7 @@ export function putDividend(code: string, endDate: string, data: { cash_div: num
 }
 
 // === MACD ===
-let _macdFactors = new Map<string, MACDFactor[]>();
+const _macdFactors = new Map<string, MACDFactor[]>();
 
 export function getMACDFactors(code: string): MACDFactor[] | undefined {
   return _macdFactors.get(code);
@@ -168,7 +168,7 @@ export function putMACDFactor(code: string, factors: MACDFactor[]) {
 }
 
 // === CYQ ===
-let _cyqPerf = new Map<string, CyqPerf[]>();
+const _cyqPerf = new Map<string, CyqPerf[]>();
 
 export function getCyqPerf(code: string): CyqPerf[] | undefined {
   return _cyqPerf.get(code);
@@ -196,7 +196,7 @@ export function putCyqPerf(code: string, data: CyqPerf) {
 }
 
 // === Daily Basic (PE/PB/换手/市值) ===
-let _dailyBasics = new Map<string, DailyBasic[]>();
+const _dailyBasics = new Map<string, DailyBasic[]>();
 
 export function getDailyBasic(code: string): DailyBasic | undefined {
   const arr = _dailyBasics.get(code);
@@ -217,7 +217,7 @@ export function loadDailyBasics(rows: DailyBasic[]) {
 }
 
 // === Finance (财务指标) ===
-let _finances = new Map<string, FinanceIndicator[]>();
+const _finances = new Map<string, FinanceIndicator[]>();
 
 export function getLatestFinance(code: string): FinanceIndicator | undefined {
   const arr = _finances.get(code);

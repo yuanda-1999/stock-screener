@@ -27,16 +27,26 @@ async function main() {
   console.log("");
 
   // 获取所有股票代码
-  const { data: stocks } = await sb.from("stock_basic_cache").select("code");
-  if (!stocks) { console.error("无法获取股票列表"); return; }
-  const codes = (stocks as { code: string }[]).map((s) => s.code);
+  const codes: string[] = [];
+  const STOCK_PAGE = 1000;
+  for (let p = 0; p < 20; p++) {
+    const { data, error } = await sb.from("stock_basic_cache")
+      .select("code")
+      .order("code")
+      .range(p * STOCK_PAGE, p * STOCK_PAGE + STOCK_PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    codes.push(...(data as { code: string }[]).map((s) => s.code));
+    if (data.length < STOCK_PAGE) break;
+  }
+  if (codes.length === 0) { console.error("无法获取股票列表"); return; }
   console.log(`共 ${codes.length} 只股票`);
 
   // 分页加载 daily_bar_cache
   console.log("加载日线数据...");
   const barRows: Record<string, unknown>[] = [];
-  const PAGE = 5000;
-  for (let p = 0; p < 500; p++) {
+  const PAGE = 1000;
+  for (let p = 0; p < 2000; p++) {
     const { data, error } = await sb.from("daily_bar_cache")
       .select("code,trade_date,open,high,low,close")
       .order("trade_date", { ascending: true })

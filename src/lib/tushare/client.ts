@@ -41,7 +41,14 @@ export async function tushareCall(
       });
     } catch (e) {
       lastErr = e as Error;
-      if ((e as Error).message?.includes("429")) continue;
+      const message = (e as Error).message || "";
+      if (
+        message.includes("429") ||
+        message.includes("fetch failed") ||
+        message.includes("socket") ||
+        message.includes("timeout") ||
+        message.includes("network")
+      ) continue;
       throw e;
     }
   }

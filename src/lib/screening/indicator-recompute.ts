@@ -12,11 +12,20 @@ function getSupabase() {
 async function upsertBatch(table: string, rows: Record<string, unknown>[]) {
   if (rows.length === 0) return;
   const sb = getSupabase();
-  const BATCH = 4000;
+  const BATCH = 500;
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
-    const { error } = await sb.from(table).upsert(batch as never);
-    if (error) console.error(`  ${table} upsert error:`, error.message);
+    let lastError: string | undefined;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { error } = await sb.from(table).upsert(batch as never);
+      if (!error) {
+        lastError = undefined;
+        break;
+      }
+      lastError = error.message;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+    }
+    if (lastError) throw new Error(`${table} upsert error: ${lastError}`);
   }
 }
 
@@ -28,22 +37,27 @@ interface Bar {
   close: number;
 }
 
+function dateWindowStart(tradeDate: string, days: number): string {
+  const year = Number(tradeDate.slice(0, 4));
+  const month = Number(tradeDate.slice(4, 6));
+  const day = Number(tradeDate.slice(6, 8));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() - days);
+  return date.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
 // 为指定交易日期重新计算所有技术指标（增量更新用）
 export async function recomputeForDate(tradeDate: string) {
   const sb = getSupabase();
 
-  // 获取所有股票代码
-  const { data: stocks } = await sb.from("stock_basic_cache").select("code");
-  if (!stocks) throw new Error("无法获取股票列表");
-  const codes = (stocks as { code: string }[]).map((s) => s.code);
-
-  // 对于增量更新，我们需要加载每只股票的所有历史日线（计算指标需要滑动窗口）
-  // 分页加载
+  // 增量指标只需要近期滑动窗口，不需要全历史。
+  const startDate = dateWindowStart(tradeDate, 60);
   const barRows: Record<string, unknown>[] = [];
-  const PAGE = 5000;
-  for (let p = 0; p < 500; p++) {
+  const PAGE = 1000;
+  for (let p = 0; p < 2000; p++) {
     const { data, error } = await sb.from("daily_bar_cache")
       .select("code,trade_date,open,high,low,close")
+      .gte("trade_date", startDate)
       .order("trade_date", { ascending: true })
       .range(p * PAGE, p * PAGE + PAGE - 1);
     if (error) throw error;
@@ -76,9 +90,8 @@ export async function recomputeForDate(tradeDate: string) {
   const wrRows: Record<string, unknown>[] = [];
   const biasRows: Record<string, unknown>[] = [];
 
-  for (const code of codes) {
-    const bars = barsByCode.get(code);
-    if (!bars || bars.length < 30) continue;
+  for (const [code, bars] of barsByCode) {
+    if (bars.length < 30) continue;
 
     const closes = bars.map((b) => b.close);
     const highs = bars.map((b) => b.high);
